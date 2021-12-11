@@ -1,8 +1,8 @@
-{*******************************************************}
+ï»¿{*******************************************************}
 {                                                       }
-{       FMX UI ×é¼ş×¢²áµ¥Ôª                             }
+{       FMX UI ç»„ä»¶æ³¨å†Œå•å…ƒ                             }
 {                                                       }
-{       °æÈ¨ËùÓĞ (C) 2016 YangYxd                       }
+{       ç‰ˆæƒæ‰€æœ‰ (C) 2016 YangYxd                       }
 {                                                       }
 {*******************************************************}
 
@@ -20,13 +20,16 @@ implementation
 uses
   UI.Debug,
   System.SysUtils, System.Actions,
-  UI.Base, UI.Standard, UI.Edit, UI.Dialog, UI.Grid, UI.Calendar,
+  UI.Base, UI.Standard, UI.Edit, UI.Dialog, UI.Calendar,
+
+  UI.Grid,
+  UI.Design.GridColumns,
+
   UI.ListView,
   // UI.ListViewEx,
   UI.Toast,
 
   UI.Design.Bounds,
-  UI.Design.GridColumns,
   UI.Design.Accessory,
 
   UI.Utils.SVGImage,
@@ -136,7 +139,7 @@ var
 {$ENDIF}
 
 {$IFDEF MSWINDOWS}
-// ÉèÖÃ»·¾³±äÁ¿
+// è®¾ç½®ç¯å¢ƒå˜é‡
 procedure SetEnvPath(const sName, sValue: string);
 var
   reg : TRegistry;
@@ -149,7 +152,7 @@ begin
     if reg.OpenKey(sLMKey,False) then begin
       reg.WriteString(sName, sValue);
       reg.CloseKey;
-      SetEnvironmentVariable(PChar(sName), PChar(sValue));//¸üĞÂµ±Ç°½ø³ÌµÄ»·¾³±äÁ¿
+      SetEnvironmentVariable(PChar(sName), PChar(sValue));//æ›´æ–°å½“å‰è¿›ç¨‹çš„ç¯å¢ƒå˜é‡
     end;
   except
   end;
@@ -184,6 +187,7 @@ begin
   RegisterComponents(PageName, [TDateView]);
   RegisterComponents(PageName, [TTimeView]);
   RegisterComponents(PageName, [TCalendarLanguage_CN]);
+  RegisterComponents(PageName, [TCalendarLanguage_EN]);
 
   RegisterComponents(PageName, [TDialogStyleManager]);
   RegisterComponents(PageName, [TToastManager]);
@@ -442,7 +446,9 @@ begin
   AddEnumElementAliases(TypeInfo(TGridDataType),
     ['PlanText', 'CheckBox', 'RadioButton', 'Image', 'ProgressBar', 'CustomDraw']);
   AddEnumElementAliases(TypeInfo(TGridFooterStyle),
-    ['None', 'DataTotal', 'DataAverage', 'DataMin', 'DataMax']);
+    ['None', 'DoSum', 'DoAvg', 'DoMin', 'DoMax', 'DoCount']);
+  AddEnumElementAliases(TypeInfo(TGridRecStatus),
+    ['RecNone', 'RecADD', 'RecMod', 'RecDel']);
   AddEnumElementAliases(TypeInfo(TViewAccessoryStyle),
     ['Accessory', 'Path']);
   AddEnumElementAliases(TypeInfo(TViewAccessoryType),
@@ -475,6 +481,7 @@ begin
   RemoveEnumElementAliases(TypeInfo(TBadgeStyle));
   RemoveEnumElementAliases(TypeInfo(TRingViewStyle));
   RemoveEnumElementAliases(TypeInfo(TGridDataType));
+  RemoveEnumElementAliases(TypeInfo(TGridRecStatus));
   RemoveEnumElementAliases(TypeInfo(TGridFooterStyle));
   RemoveEnumElementAliases(TypeInfo(TViewAccessoryStyle));
   RemoveEnumElementAliases(TypeInfo(TViewAccessoryType));
@@ -555,7 +562,7 @@ end;
 
 function TViewControlEditor.GetVerb(Index: Integer): string;
 const
-  CmdNames: TArray<string> = ['Ç°ÒÆ', 'ºóÒÆ', 'ÒÆÖÁ×îÇ°', 'ÒÆÖÁ×îºó',
+  CmdNames: TArray<string> = ['å‰ç§»', 'åç§»', 'ç§»è‡³æœ€å‰', 'ç§»è‡³æœ€å',
     'Copy Background', 'Paste Background', 'Copy Drawable', 'Paste Drawable'];
 begin
   Result := CmdNames[FCmdIndex[Index]];
@@ -609,7 +616,7 @@ begin
     Exit;
   Dialog := TBoundsDesigner.Create(nil);
   try
-    Dialog.Caption := '9¹¬¸ñ»æÍ¼±à¼­Æ÷';
+    Dialog.Caption := '9å®«æ ¼ç»˜å›¾ç¼–è¾‘å™¨';
     Dialog.Bitmap := TPatch9Bitmap(Component).Bitmap;
     Dialog.Bounds := TPatch9Bitmap(Component).Bounds.Rect;
     if Dialog.ShowModal = mrOK then begin
@@ -720,7 +727,7 @@ begin
     Exit;
   Dialog := TGridColumnsDesigner.Create(nil);
   try
-    Dialog.Caption := 'GridView ÁĞÉè¼ÆÆ÷ (Òş²ØµÄÁĞÇëÍ¨¹ıµã»÷¡°ÉÏÒ»Ïî¡±»ò¡°ÏÂÒ»Ïî¡±ÇĞ»»)';
+    Dialog.Caption := 'GridView åˆ—è®¾è®¡å™¨ (éšè—çš„åˆ—è¯·é€šè¿‡ç‚¹å‡»â€œä¸Šä¸€é¡¹â€æˆ–â€œä¸‹ä¸€é¡¹â€åˆ‡æ¢)';
     Dialog.Columns := TGridView(Component).Columns;
     if Dialog.ShowModal = mrOK then
       TGridView(Component).Columns.Assign(Dialog.Columns);

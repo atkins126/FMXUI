@@ -226,6 +226,8 @@ type
     procedure CreateImage; virtual;
     procedure DoImageChange(Sender: TObject); virtual;
     function CanRePaintBk(const View: IView; State: TViewState): Boolean; override;
+    procedure DoRecalcSize(var AWidth: Single; var AHeight: Single); override;
+    procedure DoLayoutChanged(Sender: TObject); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -386,6 +388,8 @@ type
 
     function IsCanTouch: Boolean; virtual;
     function GetScrollOffset: TPointF; virtual;
+
+    function IsScrollBarAutoShowing: Boolean; virtual;
   protected
     procedure Resize; override;
     procedure DoRealign; override;
@@ -440,6 +444,8 @@ type
     procedure ContentRemoveObject(const AObject: TFmxObject); virtual;
 
     function IsStoredScrollSmallChangeFraction: Boolean; virtual;
+
+    function CanDragScroll: Boolean; virtual;
 
     property InInternalAlign: Boolean read FInInternalAlign;
   public
@@ -550,10 +556,8 @@ type
     procedure DoPullLoad(Sender: TObject);
     procedure AniMouseUp(const Touch: Boolean; const X, Y: Single); override;
   protected
-    {$IFNDEF NEXTGEN}
+    {$IF not Defined(ANDROID) and not Defined(IOS)}
     FDownPos, FMovePos: TPointF;
-    {$ENDIF}
-    {$IFNDEF NEXTGEN}
     [Weak] FPointTarget: IControl;
     FMouseEnter, FMouseDown: Boolean;
     {$ENDIF}
@@ -831,6 +835,7 @@ type
 
   TBadgeBackground = class(TPersistent)
   private
+    [Weak] FOwner: TControl;
     FColor: TAlphaColor;
     FXRadius, FYRadius: Single;
     FCorners: TCorners;
@@ -840,15 +845,17 @@ type
     procedure SetCorners(const Value: TCorners);
     procedure SetXRadius(const Value: Single);
     procedure SetYRadius(const Value: Single);
+    function GetXRadius: Single;
+    function GetYRadius: Single;
   protected
   public
-    constructor Create();
+    constructor Create(AOwner: TControl);
     procedure Assign(Source: TPersistent); override;
     property OnChanged: TNotifyEvent read FOnChanged write FOnChanged;
   published
     property Color: TAlphaColor read FColor write SetColor default TAlphaColorRec.Red;
-    property XRadius: Single read FXRadius write SetXRadius;
-    property YRadius: Single read FYRadius write SetYRadius;
+    property XRadius: Single read GetXRadius write SetXRadius;
+    property YRadius: Single read GetYRadius write SetYRadius;
     property Corners: TCorners read FCorners write SetCorners stored IsStoredCorners;
   end;
 
@@ -1480,12 +1487,11 @@ begin
     case FScrollbar of
       TViewScroll.Horizontal:
         begin
-          if Assigned(FScrollH) and (FCanScrollH) then begin
+          if Assigned(FScrollH) and (FCanScrollH) and (ScrollValueH < 1) then begin
             SR := GetRectF(FContentBounds^);
             SR.Top := R.Top;
-            // windows平台显示滚动条，其它平台会自动隐藏
-            if FShowScrollBars then
-              SR.Bottom := R.Bottom{$IFDEF MSWINDOWS} - FScrollH.Height{$ENDIF}
+            if FShowScrollBars and not IsScrollBarAutoShowing then
+              SR.Bottom := R.Bottom - FScrollH.Height
             else
               SR.Bottom := R.Bottom;
             OffsetRect(SR, -(ScrollValueH * (SR.Width - R.Width)), 0);
@@ -1494,11 +1500,11 @@ begin
         end;
       TViewScroll.Vertical:
         begin
-          if Assigned(FScrollV) and (FCanScrollV) then begin
+          if Assigned(FScrollV) and (FCanScrollV) and (ScrollValueV < 1) then begin
             SR := GetRectF(FContentBounds^);
             SR.Left := R.Left;
-            if FShowScrollBars then
-              SR.Right := R.Right{$IFDEF MSWINDOWS} - FScrollV.Width{$ENDIF}
+            if FShowScrollBars and not IsScrollBarAutoShowing then
+              SR.Right := R.Right - FScrollV.Width
             else
               SR.Right := R.Right;
             OffsetRect(SR, 0, -(ScrollValueV * (SR.Height - R.Height)));
@@ -1538,10 +1544,9 @@ begin
       IconS := GetDrawableWidth;
       if (IconS > 0) and (FDrawable.Position in [TDrawablePosition.Left, TDrawablePosition.Right]) then
         V := V - IconS - FDrawable.Padding;
-      {$IFDEF MSWINDOWS}
-      if (FScrollbar = TViewScroll.Vertical) and (FScrollV <> nil) and (FScrollV.Visible) then
+      if (FScrollbar = TViewScroll.Vertical) and (FScrollV <> nil) and (FScrollV.Visible)
+        and not IsScrollBarAutoShowing then
         V := V - FScrollV.Width;
-      {$ENDIF}
     end else
       V := 0;
 
@@ -1589,7 +1594,6 @@ begin
       FContentBounds^ := RectD(Padding.Left, Padding.Top, VW - Padding.Right, VH - Padding.Bottom);
       RealignContent;
     end;
-
   finally
     FInFitSize := False;
   end;
@@ -2102,6 +2106,11 @@ begin
   Result := FCanAnimation;
 end;
 
+function TScrollView.CanDragScroll: Boolean;
+begin
+  Result := {$IF Defined(ANDROID) or Defined(IOS)}True{$ELSE}FDragScroll{$ENDIF};
+end;
+
 function TScrollView.CanInheritedCMGesture(const EventInfo: TGestureEventInfo): Boolean;
 begin
   if CanVScroll and Assigned(FScrollV) then begin
@@ -2123,7 +2132,7 @@ procedure TScrollView.CMGesture(var EventInfo: TGestureEventInfo);
 var
   LP: TPointF;
 begin
-  if (FCanScrollV or FCanScrollH {$IFNDEF NEXTGEN} or FDragScroll{$ENDIF}) and ((EventInfo.GestureID = igiPan)) then
+  if (FCanScrollV or FCanScrollH or CanDragScroll) and ((EventInfo.GestureID = igiPan)) then
   begin
     if FInVisible or (FAniCalculations = nil) then
       Exit;
@@ -2277,7 +2286,7 @@ end;
 
 procedure TScrollView.DoUpdateAniCalculations(const AAniCalculations: TScrollCalculations);
 begin
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if FDragScroll then begin
     FCanAnimation := True;
     AAniCalculations.Animation := FCanAnimation;
@@ -2315,7 +2324,7 @@ procedure TScrollView.DoUpdateScrollingLimits(NeedUpdateScroll: Boolean; const V
 var
   Targets: array [0..1] of TAniCalculations.TTarget;
   LScroll: TScrollBar;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   FTrackChanging: Boolean;
   {$ENDIF}
 begin
@@ -2344,7 +2353,7 @@ begin
       LScroll := GetScrollBar;
       if not Assigned(LScroll) then
         Exit;
-      {$IFNDEF NEXTGEN}
+      {$IF not Defined(ANDROID) and not Defined(IOS)}
       // 非移动平台，在拖动滚动条后，动态更新滚动条的值
       FTrackChanging := GetRttiValue<Boolean>(LScroll, 'FTrackChanging');
       SetRttiValue<Boolean>(LScroll, 'FTrackChanging', False); // 临时将此变量设为False，否则为忽略本次调整
@@ -2407,7 +2416,7 @@ end;
 
 function TScrollView.GetHScrollBarValue: Double;
 begin
-  if (FAniCalculations <> nil) and Assigned(FScrollH) and (FCanScrollH{$IFNDEF NEXTGEN} or FDragScroll{$ENDIF}) then
+  if (FAniCalculations <> nil) and Assigned(FScrollH) and (FCanScrollH or CanDragScroll) then
     Result := ViewportPosition.X
   else
     Result := 0;
@@ -2490,7 +2499,7 @@ end;
 
 function TScrollView.GetVScrollBarValue: Double;
 begin
-  if (FAniCalculations <> nil) and Assigned(FScrollV) and (FCanScrollV{$IFNDEF NEXTGEN} or FDragScroll{$ENDIF}) then begin
+  if (FAniCalculations <> nil) and Assigned(FScrollV) and (FCanScrollV or CanDragScroll) then begin
     Result := ViewportPosition.Y; // / (FScroll.Max - FScroll.ViewportSize) * FScroll.Max
   end else
     Result := 0;
@@ -2644,6 +2653,11 @@ begin
   Result := TOSVersion.Platform in [pfWindows, pfMacOS, pfLinux];
 end;
 
+function TScrollView.IsScrollBarAutoShowing: Boolean;
+begin
+  Result :=  Assigned(FAniCalculations) and FAniCalculations.AutoShowing;
+end;
+
 function TScrollView.IsStoredScrollbarWidth: Boolean;
 begin
   Result := FScrollbarWidth > 0;
@@ -2692,7 +2706,7 @@ procedure TScrollView.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
 begin
   FMouseEvents := True;
   inherited MouseDown(Button, Shift, X, Y);
-  if Assigned(FAniCalculations) and (Button = TMouseButton.mbLeft){$IFNDEF NEXTGEN} and (FDragScroll){$ENDIF} then
+  if Assigned(FAniCalculations) and (Button = TMouseButton.mbLeft) and CanDragScroll then
   begin
     AniMouseDown(ssTouch in Shift, X, Y);
   end;
@@ -2702,7 +2716,7 @@ procedure TScrollView.MouseMove(Shift: TShiftState; X, Y: Single);
 begin
   FMouseEvents := True;
   inherited;
-  if Assigned(FAniCalculations) and FAniCalculations.Down{$IFNDEF NEXTGEN} and (FDragScroll){$ENDIF} then
+  if Assigned(FAniCalculations) and FAniCalculations.Down and CanDragScroll then
   begin
     AniMouseMove(ssTouch in Shift, X, Y);
   end;
@@ -2713,7 +2727,7 @@ procedure TScrollView.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
 begin
   FMouseEvents := True;
   inherited;
-  if Assigned(FAniCalculations) and (Button = TMouseButton.mbLeft){$IFNDEF NEXTGEN} and (FDragScroll){$ENDIF} then
+  if Assigned(FAniCalculations) and (Button = TMouseButton.mbLeft) and CanDragScroll then
   begin
     AniMouseUp(ssTouch in Shift, X, Y);
   end;
@@ -2813,22 +2827,12 @@ begin
         FCanScrollV := False;
         FCanScrollH := False;
       end;
-    {$IFDEF NEXTGEN}
-    TViewScroll.Horizontal: FCanScrollH := True;
-    TViewScroll.Vertical: FCanScrollV := True;
-    {$ELSE}
-    TViewScroll.Horizontal: FCanScrollH := DragScroll or (FContentBounds.Width > ViewRect.Width);
-    TViewScroll.Vertical: FCanScrollV := DragScroll or (FContentBounds.Height > ViewRect.Height);
-    {$ENDIF}
+    TViewScroll.Horizontal: FCanScrollH := CanDragScroll or (FContentBounds.Width > ViewRect.Width);
+    TViewScroll.Vertical: FCanScrollV := CanDragScroll or (FContentBounds.Height > ViewRect.Height);
     TViewScroll.Both:
       begin
-        {$IFDEF NEXTGEN}
-          FCanScrollV := True;
-          FCanScrollH := True;
-        {$ELSE}
-          FCanScrollH := DragScroll or (FContentBounds.Width > ViewRect.Width);
-          FCanScrollV := DragScroll or (FContentBounds.Height > ViewRect.Height);
-        {$ENDIF}
+        FCanScrollH := CanDragScroll or (FContentBounds.Width > ViewRect.Width);
+        FCanScrollV := CanDragScroll or (FContentBounds.Height > ViewRect.Height);
       end;
   end;
   if Assigned(FScrollV) or Assigned(FScrollH) then begin
@@ -2879,7 +2883,7 @@ procedure TScrollView.SetDragScroll(const Value: Boolean);
 begin
   if FDragScroll <> Value then begin
     FDragScroll := Value;
-    {$IFNDEF NEXTGEN}
+    {$IF not Defined(ANDROID) and not Defined(IOS)}
     if not (csDesigning in ComponentState) then begin
       if FScrollbar = TViewScroll.None then
         FreeScrollbar
@@ -2945,7 +2949,7 @@ procedure TScrollView.SetVScrollBarValue(const Value: Double);
 var
   V: TPointD;
 begin
-  if (FAniCalculations <> nil) and Assigned(FScrollV) and (FCanScrollV{$IFNDEF NEXTGEN} or FDragScroll{$ENDIF}) then begin
+  if (FAniCalculations <> nil) and Assigned(FScrollV) and (FCanScrollV or CanDragScroll) then begin
     V := ViewportPosition;
     V.Y := Value;
     ViewportPosition := V;
@@ -2976,7 +2980,7 @@ begin
   LViewportPosition := ViewportPosition;
   R := ViewRect;
   if AScrollBar = TViewScroll.Vertical then begin
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     FCanScrollV := True; // 移动平台始终能滚动
     {$ELSE}
     FCanScrollV := FContentBounds.Height > R.Height;
@@ -2993,7 +2997,7 @@ begin
       end;
     end;
   end else if AScrollBar = TViewScroll.Horizontal then begin
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     FCanScrollH := True; // 移动平台始终能滚动
     {$ELSE}
     FCanScrollH := FContentBounds.Width > R.Width;
@@ -3031,7 +3035,7 @@ begin
     AScroll.Width := ScrollbarWidth;
     AScroll.Height := ScrollbarWidth;
   end else begin
-    {$IFNDEF NEXTGEN}
+    {$IF not Defined(ANDROID) and not Defined(IOS)}
     if not DragScroll then begin
       AScroll.Width := 16;
       AScroll.Height := 16;
@@ -3501,7 +3505,50 @@ end;
 
 procedure TImageView.DoImageChange(Sender: TObject);
 begin
+  RecalcSize;
   Repaint;
+end;
+
+procedure TImageView.DoLayoutChanged(Sender: TObject);
+begin
+  inherited;
+  RecalcSize;
+end;
+
+procedure TImageView.DoRecalcSize(var AWidth, AHeight: Single);
+var
+  Img: TBrush;
+  Bmp: TBitmap;
+begin
+  if not Assigned(FImage) then
+    Exit;
+
+  if IsChecked then
+    Img := FImage.GetStateItem(TViewState.Checked)
+  else
+    Img := nil;
+  if FImage.BrushIsEmpty(Img) then
+    Img := FImage.GetStateItem(FDrawState);
+
+  if (not Assigned(Img)) or (Img.Kind <> TBrushKind.Bitmap) then
+    Exit;
+  if not Assigned(Img.Bitmap) then
+    Exit;
+
+  Bmp := Img.Bitmap.Bitmap;
+  if (not Assigned(Bmp)) or Bmp.IsEmpty then
+    Exit;
+
+  if (WidthSize = TViewSize.WrapContent) and (HeightSize = TViewSize.WrapContent) then begin
+    AWidth := Bmp.Width + FImage.Padding.Left + FImage.Padding.Right + Padding.Left + Padding.Right;
+    AHeight := Bmp.Height + FImage.Padding.Top + FImage.Padding.Bottom + Padding.Top + Padding.Bottom;
+  end
+  else if WidthSize = TViewSize.WrapContent then begin
+    AWidth := AHeight * Bmp.Width / Bmp.Height + FImage.Padding.Left + FImage.Padding.Right + Padding.Left + Padding.Right;
+  end
+  else if HeightSize = TViewSize.WrapContent then begin
+    AHeight := AWidth * Bmp.Height / Bmp.Width + FImage.Padding.Top + FImage.Padding.Bottom + Padding.Top + Padding.Bottom;
+  end;
 end;
 
 function TImageView.GetImage: TDrawable;
@@ -3552,7 +3599,7 @@ begin
   inherited Create(AOwner);
   FMaxValue := 99;
   FStyle := TBadgeStyle.NumberText;
-  FBackground := TBadgeBackground.Create;
+  FBackground := TBadgeBackground.Create(Self);
   FBackground.FXRadius := 8;
   FBackground.FYRadius := 8;
   FText := TSimpleTextSettings.Create(Self);
@@ -3595,8 +3642,8 @@ begin
           P.Width := P.Width + Padding.Left + Padding.Right;
           P.Height := P.Height + Padding.Top + Padding.Bottom;
           if Assigned(FBackground) then begin
-            if P.Width < FBackground.FXRadius * 2 then P.Width := FBackground.FXRadius * 2;
-            if P.Height < FBackground.FYRadius * 2 then P.Height := FBackground.FYRadius * 2;
+            if P.Width < FBackground.XRadius * 2 then P.Width := FBackground.XRadius * 2;
+            if P.Height < FBackground.YRadius * 2 then P.Height := FBackground.YRadius * 2;
           end;
         end;
       TBadgeStyle.Icon:
@@ -3752,11 +3799,14 @@ end;
 
 function TBadgeView.IsVisibleView: Boolean;
 begin
-  if FStyle = TBadgeStyle.Icon then
-    Result := (FValue > 0) and Assigned(FIcon) and Assigned(FIcon.Bitmap) and Assigned(FIcon.Bitmap.Bitmap) and
-      (FIcon.Bitmap.Bitmap.Width > 0) and (FIcon.Bitmap.Bitmap.Height > 0)
+  case FStyle of
+    TBadgeStyle.NumberText: Result := FValue > 0;
+    TBadgeStyle.Icon:
+      Result := Assigned(FIcon) and Assigned(FIcon.Bitmap) and Assigned(FIcon.Bitmap.Bitmap) and
+        (FIcon.Bitmap.Bitmap.Width > 0) and (FIcon.Bitmap.Bitmap.Height > 0);
   else
-    Result := (FValue > 0)
+    Result := True;
+  end;
 end;
 
 procedure TBadgeView.MarginsChanged(Sender: TObject);
@@ -3785,14 +3835,14 @@ begin
     if FStyle = TBadgeStyle.Icon then begin
       if Assigned(FIcon) then begin
         with FBackground do begin
-          Canvas.FillRect(R, FXRadius, FYRadius, FCorners, LOpacity, FIcon);
+          Canvas.FillRect(R, XRadius, YRadius, FCorners, LOpacity, FIcon);
         end;
       end;
     end else begin
       if Assigned(FBackground) then
         with FBackground do begin
           Canvas.Fill.Color := FColor;
-          Canvas.FillRect(R, FXRadius, FYRadius, FCorners, LOpacity);
+          Canvas.FillRect(R, XRadius, YRadius, FCorners, LOpacity);
         end;
       if Assigned(FText) and (FText.TextLength > 0) then
         FText.Draw(Canvas, R, LOpacity, TViewState.None);
@@ -3950,10 +4000,21 @@ begin
     inherited;
 end;
 
-constructor TBadgeBackground.Create;
+constructor TBadgeBackground.Create(AOwner: TControl);
 begin
+  FOwner := AOwner;
   FCorners := AllCorners;
   FColor := TAlphaColorRec.Red;
+end;
+
+function TBadgeBackground.GetXRadius: Single;
+begin
+  Result := GetRadius(FXRadius, FOwner);
+end;
+
+function TBadgeBackground.GetYRadius: Single;
+begin
+  Result := GetRadius(FYRadius, FOwner);
 end;
 
 function TBadgeBackground.IsStoredCorners: Boolean;
@@ -4580,7 +4641,7 @@ function TCustomMultiPathView.CanRePaintBk(const View: IView;
 begin
   Result := inherited CanRePaintBk(View, State);
   if (not Result) then begin
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     Result := (FPaths.Count > 0) and (FPressedIndex <> -1);
     {$ELSE}
     Result := (FPaths.Count > 0) and ((FHoverIndex <> -1) or (FPressedIndex <> -1));
@@ -4659,13 +4720,13 @@ begin
 end;
 
 procedure TCustomMultiPathView.MouseMove(Shift: TShiftState; X, Y: Single);
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 var
   I: Integer;
 {$ENDIF}
 begin
   inherited MouseMove(Shift, X, Y);
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   I := IndexAt(PointF(X, Y));
   if I <> FHoverIndex then begin
     FHoverIndex := I;
@@ -4740,7 +4801,7 @@ function TCustomMultiPathView.PointInObject(X, Y: Single): Boolean;
 begin
   if FClickInPath and (FPaths.Count > 0) and (not AbsoluteInVisible) and (not FInPaintTo) then begin
     Result := IndexAt(AbsoluteToLocal(PointF(X, Y))) <> -1;
-    {$IFNDEF NEXTGEN}
+    {$IF not Defined(ANDROID) and not Defined(IOS)}
     if (not Result) and (FHoverIndex <> -1) then begin
       FHoverIndex := -1;
       if not (csDesigning in ComponentState) then
@@ -5394,7 +5455,7 @@ end;
 
 procedure TPullScrollView.CheckMouseLeftState;
 begin
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if (not Assigned(Self)) or (csDestroying in ComponentState) then
     Exit;
   // 检查鼠标左键是否松开
@@ -5437,7 +5498,7 @@ end;
 procedure TPullScrollView.Click;
 begin
   inherited Click;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if DragScroll and Assigned(FPointTarget) and (FPointTarget as TObject <> Self) then
     TPullScrollView(FPointTarget as TControl).Click;
   {$ENDIF}
@@ -5491,14 +5552,10 @@ end;
 
 function TPullScrollView.CreateScroll: TScrollBar;
 begin
-  {$IFNDEF NEXTGEN}
-  if DragScroll then
+  if CanDragScroll then
     Result := TSmallScrollBar.Create(Self)
   else
     Result := TScrollBar.Create(Self);
-  {$ELSE}
-  Result := TSmallScrollBar.Create(Self);
-  {$ENDIF}
 end;
 
 destructor TPullScrollView.Destroy;
@@ -5526,7 +5583,7 @@ end;
 procedure TPullScrollView.DoMouseEnter;
 begin
   inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   FMouseEnter := True;
   if DragScroll and Assigned(FPointTarget) and (FPointTarget as TObject <> Self) then
     FPointTarget.DoMouseEnter;
@@ -5536,7 +5593,7 @@ end;
 procedure TPullScrollView.DoMouseLeave;
 begin
   inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   FMouseEnter := False;
   if DragScroll and Assigned(FPointTarget) and (FPointTarget as TObject <> Self) then
     FPointTarget.DoMouseLeave;
@@ -5701,19 +5758,15 @@ begin
   if not Assigned(FContent) then
     Exit;
 
-  {$IFDEF MSWINDOWS}
-  if Assigned(FScrollH) and (FScrollH.Visible) then
+  if Assigned(FScrollH) and (FScrollH.Visible) and not IsScrollBarAutoShowing then
     H := Height - Padding.Bottom - Padding.Top - FScrollH.Height
   else
-  {$ENDIF}
-  H := Height - Padding.Bottom - Padding.Top;
+    H := Height - Padding.Bottom - Padding.Top;
 
-  {$IFDEF MSWINDOWS}
-  if Assigned(FScrollV) and (FScrollV.Visible) then
+  if Assigned(FScrollV) and (FScrollV.Visible) and not IsScrollBarAutoShowing then
     W := Width - Padding.Right - Padding.Left - FScrollV.Width
   else
-  {$ENDIF}
-  W := Width - Padding.Right - Padding.Left;
+    W := Width - Padding.Right - Padding.Left;
 
   case ScrollBars of
     TViewScroll.Horizontal:
@@ -6042,7 +6095,7 @@ procedure TPullScrollView.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
   Y: Single);
 begin
   //LogD('MouseDown');
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   inherited;
   {$ELSE}
   if DragScroll then begin
@@ -6076,12 +6129,12 @@ begin
 end;
 
 procedure TPullScrollView.MouseMove(Shift: TShiftState; X, Y: Single);
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 var
   P: TPointF;
 {$ENDIF}
 begin
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   inherited;
   {$ELSE}
   if DragScroll then begin
@@ -6114,13 +6167,13 @@ end;
 
 procedure TPullScrollView.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
   Y: Single);
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 var
   P: TPointF;
 {$ENDIF}
 begin
   //LogD('MouseUp');
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   inherited;
   {$ELSE}
   FMouseDown := False;
@@ -6142,10 +6195,10 @@ begin
 end;
 
 function TPullScrollView.ObjectAtPoint(AScreenPoint: TPointF): IControl;
-{$IFNDEF NEXTGEN}var P: TPointF; IT: IViewTouch;{$ENDIF}
+{$IF not Defined(ANDROID) and not Defined(IOS)}var P: TPointF; IT: IViewTouch;{$ENDIF}
 begin
   Result := inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if DragScroll and (not (csDesigning in ComponentState)) then begin // 如果允许拖动
     if FMouseDown then
       Exit;

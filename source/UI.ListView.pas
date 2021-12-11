@@ -278,10 +278,6 @@ type
 
     FMaxListItemBottom: Double;
 
-    {$IFNDEF NEXTGEN}
-    FDownPos, FMovePos: TPointF;
-    {$ENDIF}
-
     FOnDrawViewBackgroud: TOnDrawViewBackgroud;
     FOnItemMeasureHeight: TOnItemMeasureHeight;
     FOnItemClick: TOnItemClick;
@@ -345,7 +341,8 @@ type
     function InnerCalcDividerHeight: Single;
     function GetDividerHeight: Single;
   protected
-    {$IFNDEF NEXTGEN}
+    {$IF not Defined(ANDROID) and not Defined(IOS)}
+    FDownPos, FMovePos: TPointF;
     [Weak] FPointTarget: IControl;
     FMouseEnter, FMouseDown: Boolean;
     {$ENDIF}
@@ -813,7 +810,7 @@ end;
 
 procedure TListViewEx.CheckMouseLeftState;
 begin
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if (not Assigned(Self)) or (csDestroying in ComponentState) then
     Exit;
   // 检查鼠标左键是否松开
@@ -845,7 +842,7 @@ end;
 procedure TListViewEx.Click;
 begin
   inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if DragScroll and Assigned(FPointTarget) and (FPointTarget as TObject <> Self) then
     TListViewEx(FPointTarget as TControl).Click;
   {$ENDIF}
@@ -901,14 +898,10 @@ end;
 
 function TListViewEx.CreateScroll: TScrollBar;
 begin
-  {$IFNDEF NEXTGEN}
-  if DragScroll then
+  if CanDragScroll then
     Result := TSmallScrollBar.Create(Self)
   else
     Result := TScrollBar.Create(Self);
-  {$ELSE}
-  Result := TSmallScrollBar.Create(Self);
-  {$ENDIF}
 end;
 
 destructor TListViewEx.Destroy;
@@ -943,7 +936,7 @@ end;
 procedure TListViewEx.DoMouseEnter;
 begin
   inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   FMouseEnter := True;
   if DragScroll and Assigned(FPointTarget) and (FPointTarget as TObject <> Self) then
     FPointTarget.DoMouseEnter;
@@ -953,7 +946,7 @@ end;
 procedure TListViewEx.DoMouseLeave;
 begin
   inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   FMouseEnter := False;
   if DragScroll and Assigned(FPointTarget) and (FPointTarget as TObject <> Self) then
     FPointTarget.DoMouseLeave;
@@ -995,14 +988,10 @@ begin
       Exit;
     end;
 
-    {$IFDEF MSWINDOWS}
-    if Assigned(FScrollV) and (FScrollV.Visible) then
-      W := Width - Padding.Right - Padding.Left{$IFDEF MSWINDOWS} - FScrollV.Width{$ENDIF}
+    if Assigned(FScrollV) and (FScrollV.Visible) and not IsScrollBarAutoShowing then
+      W := Width - Padding.Right - Padding.Left - FScrollV.Width
     else
       W := Width - Padding.Right - Padding.Left;
-    {$ELSE}
-    W := Width - Padding.Right - Padding.Left;
-    {$ENDIF}
 
     FContentViews.SetBounds(Padding.Left, Padding.Top, W,
       Height - Padding.Bottom - Padding.Top);
@@ -1137,10 +1126,10 @@ begin
 end;
 
 function TListViewEx.ObjectAtPoint(AScreenPoint: TPointF): IControl;
-{$IFNDEF NEXTGEN}var P: TPointF; {$ENDIF}
+{$IF not Defined(ANDROID) and not Defined(IOS)}var P: TPointF; {$ENDIF}
 begin
   Result := inherited;
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   if DragScroll and not FMouseDown then begin // 如果允许拖动
     P := ScreenToLocal(AScreenPoint);
     if Assigned(Result) and (P.X < Width - 10) then begin
@@ -1226,7 +1215,6 @@ begin
           H := H + DividerH + FItemsPoints[i].H;
       end;
     end;
-
   end;
 
   FContentBounds.Right := FContentViews.Width;
@@ -1286,7 +1274,7 @@ end;
 procedure TListViewEx.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
   Y: Single);
 begin
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   inherited;
   {$ELSE}
   if DragScroll then begin
@@ -1320,12 +1308,12 @@ begin
 end;
 
 procedure TListViewEx.MouseMove(Shift: TShiftState; X, Y: Single);
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 var
   P: TPointF;
 {$ENDIF}
 begin
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   inherited;
   {$ELSE}
   if DragScroll then begin
@@ -1345,12 +1333,12 @@ end;
 
 procedure TListViewEx.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
   Y: Single);
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 var
   P: TPointF;
 {$ENDIF}
 begin
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   inherited;
   {$ELSE}
   FMouseDown := False;
@@ -3031,7 +3019,7 @@ end;
 
 function TListViewContent.ObjectAtPoint(AScreenPoint: TPointF): IControl;
 begin
-  if {$IFNDEF NEXTGEN}ListView.FMouseDown and{$ENDIF} Assigned(ListView.FAniCalculations) and (ListView.FAniCalculations.Shown) then
+  if {$IF not Defined(ANDROID) and not Defined(IOS)}ListView.FMouseDown and{$ENDIF} Assigned(ListView.FAniCalculations) and (ListView.FAniCalculations.Shown) then
     Result := nil   // 手势滚动中，不允许点击子项
   else
     Result := inherited ObjectAtPoint(AScreenPoint);

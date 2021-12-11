@@ -93,6 +93,9 @@ const
   {$IFDEF ANDROID}
   COLOR_ProcessBackgroundColor = $7f000000;
   {$ENDIF}
+  {$IFDEF LINUX}
+  COLOR_ProcessBackgroundColor = $7f000000;
+  {$ENDIF}
   COLOR_ProcessTextColor = $fff7f7f7;
 
   COLOR_ButtonColor = $ffffffff;
@@ -196,6 +199,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure Assign(Dest: TPersistent); override;
   published
     // 遮罩层颜色
     property DialogMaskColor: TAlphaColor read FDialogMaskColor write FDialogMaskColor default COLOR_DialogMaskColor;
@@ -2056,9 +2060,6 @@ begin
   Dialog.FViewRoot.Index := Dialog.FViewRoot.Parent.ChildrenCount - 1;
   Dialog.FViewRoot.Background.ItemDefault.Kind := TViewBrushKind.Solid;
   Dialog.FViewRoot.CanFocus := False;
-  {$IFDEF ANDROID}
-  Dialog.FViewRoot.Padding.Top := TView.GetStatusHeight;
-  {$ENDIF}
 
   View.Name := '';
   View.Parent := Dialog.FViewRoot;
@@ -2159,6 +2160,15 @@ begin
       end;
   end;
 
+  {$IFDEF ANDROID}
+  if Y = 0 then begin
+    View.Padding.Top := TView.GetStatusHeight;
+    if View is TFrameView then
+      with TFrameViewTmp(View) do
+        if IsUseDefaultBackColor or (BackColor and $FF000000 = 0) then
+          BackColor := StatusColor;
+  end;
+  {$ENDIF}
   View.Position.Point := TPointF.Create(X, Y);
   if View is TFrameView then
     TFrameViewTmp(View).DoShow();
@@ -2853,8 +2863,9 @@ begin
   // KngStr: 更改 KeyDown 为 AfterDialogKey，暂时关闭 Key < $80
 
   // 如果按下了返回键，且允许取消对话框，则关闭对话框
-  if (FDialog.Cancelable) and (Key in [vkEscape, vkHardwareBack]) then begin
-    FDialog.Cancel;
+  if Key in [vkEscape, vkHardwareBack] then begin
+    if FDialog.Cancelable then
+      FDialog.Cancel;
     Key := 0;
     Exit;
   end;
@@ -2899,7 +2910,10 @@ end;
 
 function TDialogView.GetTabStopController: ITabStopController;
 begin
-  Result := Self;
+  if Parent <> nil then
+    Result := Self
+  else
+    Result := nil;
 end;
 
 procedure TDialogView.Hide;
@@ -3359,6 +3373,22 @@ begin
 end;
 
 { TDialogStyleManager }
+
+procedure TDialogStyleManager.Assign(Dest: TPersistent);
+var
+  LStyleMgr: TDialogStyleManager;
+begin
+  if not Assigned(Dest) then begin
+    LStyleMgr := TDialogStyleManager.Create(nil);
+    try
+      Assign(LStyleMgr);
+    finally
+      FreeAndNil(LStyleMgr);
+    end;
+  end
+  else
+    inherited;
+end;
 
 procedure TDialogStyleManager.AssignTo(Dest: TPersistent);
 var

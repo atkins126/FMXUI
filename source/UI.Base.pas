@@ -47,9 +47,27 @@ uses
   FMX.Types, FMX.StdCtrls, FMX.Platform, FMX.Controls, FMX.InertialMovement, FMX.Ani;
 
 const
+  {$IF CompilerVersion >= 33}
+  AllCurrentPlatforms = pidAllPlatforms;
+  {$ELSE}
   AllCurrentPlatforms =
-    pidWin32 or pidWin64 or pidOSX32 or
-    pidiOSSimulator or pidiOSDevice or pidAndroid;
+    {$IF CompilerVersion >= 23}
+    pidOSX32 or pidWin64 or
+    {$ENDIF XE2}
+    {$IF CompilerVersion >= 24}
+    pidiOSDevice32 or pidiOSSimulator or
+    {$ENDIF XE3}
+    {$IF CompilerVersion >= 26}
+    pidAndroid or
+    {$ENDIF XE5}
+    {$IF CompilerVersion >= 29}
+    pidiOSDevice64 or
+    {$ENDIF XE8}
+    {$IF CompilerVersion >= 32}
+    pidLinux64 or
+    {$ENDIF 10.2}
+    pidWin32;
+  {$ENDIF}
 
 type
   IView = interface;
@@ -345,6 +363,8 @@ type
     function IsStoredCorners: Boolean;
     procedure SetCornerType(const Value: TCornerType);
     procedure SetKind(const Value: TDrawableKind);
+    function GetXRadius: Single;
+    function GetYRadius: Single;
   protected
     [Weak] FView: IView;
     FDefault: TBrush;  // 0
@@ -411,8 +431,8 @@ type
 
     property OnChanged: TNotifyEvent read FOnChanged write FOnChanged;
     // 边框圆角
-    property XRadius: Single read FXRadius write SetXRadius;
-    property YRadius: Single read FYRadius write SetYRadius;
+    property XRadius: Single read GetXRadius write SetXRadius;
+    property YRadius: Single read GetYRadius write SetYRadius;
     property Corners: TCorners read FCorners write SetCorners stored IsStoredCorners;
     property CornerType: TCornerType read FCornerType write SetCornerType default TCornerType.Round;
 
@@ -1857,6 +1877,12 @@ function GetScreenScale: single;
 // 获取组件所属的窗口
 function GetParentForm(AObj: TFmxObject): TCustomForm;
 
+// 从最短的边取Radius的值，ARadius取值范围 -1 < ARadius < 1
+function GetRadius(const ARadius: Single; const AWidth, AHeight: Single): Single; overload;
+function GetRadius(const ARadius: Single; const ARect: TRectF): Single; overload;
+function GetRadius(const ARadius: Single; const AView: IView): Single; overload;
+function GetRadius(const ARadius: Single; const AControl: TControl): Single; overload;
+
 function ViewStateToString(const State: TViewStates): string;
 function ComponentStateToString(const State: TComponentState): string;
 
@@ -2261,6 +2287,42 @@ begin
   AScreenScale := Result;
 end;
 
+function GetRadius(const ARadius: Single; const AWidth, AHeight: Single): Single;
+begin
+  if (AWidth > 0) and (AHeight > 0) and (ARadius < 1) and (ARadius > -1) then begin
+    if AWidth > AHeight then
+      Result := AHeight * ARadius
+    else
+      Result := AWidth * ARadius
+  end
+  else
+    Result := ARadius;
+end;
+
+function GetRadius(const ARadius: Single; const ARect: TRectF): Single;
+begin
+  if not ARect.IsEmpty then
+    Result := GetRadius(ARadius, ARect.Width, ARect.Height)
+  else
+    Result := ARadius;
+end;
+
+function GetRadius(const ARadius: Single; const AView: IView): Single;
+begin
+  if Assigned(AView) then
+    Result := GetRadius(ARadius, AView.Width, AView.Height)
+  else
+    Result := ARadius;
+end;
+
+function GetRadius(const ARadius: Single; const AControl: TControl): Single;
+begin
+  if Assigned(AControl) then
+    Result := GetRadius(ARadius, AControl.Width, AControl.Height)
+  else
+    Result := ARadius;
+end;
+
 { TDrawableBase }
 
 procedure TDrawableBase.Assign(Source: TPersistent);
@@ -2397,6 +2459,16 @@ begin
   Result := GetBrush(TViewState(Index), not (csLoading in FView.GetComponentState));
 end;
 
+function TDrawableBase.GetXRadius: Single;
+begin
+  Result := GetRadius(FXRadius, FView);
+end;
+
+function TDrawableBase.GetYRadius: Single;
+begin
+  Result := GetRadius(FYRadius, FView);
+end;
+
 procedure TDrawableBase.InitDrawable;
 begin
 end;
@@ -2506,7 +2578,7 @@ begin
   R := GetDrawRect(0, 0, FView.GetWidth, FView.GetHeight);
   V := GetStateItem(AState);
   if V <> nil then
-    FillRect(Canvas, R, FXRadius, FYRadius, FCorners, FView.Opacity, V, FCornerType);
+    FillRect(Canvas, R, XRadius, YRadius, FCorners, FView.Opacity, V, FCornerType);
   DoDrawed(Canvas, R, AState, FView.Opacity);
 end;
 
@@ -2514,7 +2586,7 @@ procedure TDrawableBase.DrawBrushTo(Canvas: TCanvas; ABrush: TBrush;
   const R: TRectF);
 begin
   if ABrush <> nil then
-    FillRect(Canvas, R, FXRadius, FYRadius, FCorners, FView.GetOpacity, ABrush, FCornerType);
+    FillRect(Canvas, R, XRadius, YRadius, FCorners, FView.GetOpacity, ABrush, FCornerType);
 end;
 
 procedure TDrawableBase.DrawStateTo(Canvas: TCanvas; const R: TRectF;
@@ -2534,7 +2606,7 @@ begin
   V := GetStateItem(AState);
   VR := GetDrawRect(R.Left, R.Top, R.Right, R.Bottom);
   if V <> nil then
-    FillRect(Canvas, VR, FXRadius, FYRadius, FCorners, AOpacity, V, FCornerType);
+    FillRect(Canvas, VR, XRadius, YRadius, FCorners, AOpacity, V, FCornerType);
   DoDrawed(Canvas, VR, AState, AOpacity);
 end;
 
@@ -2559,7 +2631,7 @@ var
   V: Single;
 begin
   if (Ord(ABrush.Kind) = Ord(TViewBrushKind.Patch9Bitmap)) and (ABrush is TViewBrush) then begin
-    FillRect9Patch(Canvas, ARect, XRadius, YRadius, ACorners, AOpacity, TViewBrush(ABrush), ACornerType);
+    FillRect9Patch(Canvas, ARect, GetRadius(XRadius, ARect), GetRadius(YRadius, ARect), ACorners, AOpacity, TViewBrush(ABrush), ACornerType);
   end else begin
     if Ord(ABrush.Kind) = Ord(TViewBrushKind.AccessoryBitmap) then begin
       if Assigned(TViewBrushBase(ABrush).FAccessory) then begin
@@ -2579,7 +2651,7 @@ begin
       case FKind of
         TDrawableKind.None:
           begin
-            Canvas.FillRect(ARect, XRadius, YRadius, ACorners, AOpacity, ABrush, ACornerType);
+            Canvas.FillRect(ARect, GetRadius(XRadius, ARect), GetRadius(YRadius, ARect), ACorners, AOpacity, ABrush, ACornerType);
           end;
         TDrawableKind.Circle:
           begin
@@ -4522,7 +4594,16 @@ begin
   {$IFDEF POSIX}
   FDownUpOffset := Y - FDownUpOffset;
   {$ENDIF}
-  inherited;
+
+  // inherited;
+  if AbsoluteEnabled and Pressed and not DoubleClick and PointInObjectLocal(X, Y) then begin
+    Click;
+    if (not Assigned(Self)) or (csDestroying in ComponentState) then
+      Exit;
+
+    Pressed := False;
+    StartTriggerAnimation(Self, 'Pressed');
+  end;
 end;
 
 procedure TView.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
@@ -4960,13 +5041,23 @@ end;
 procedure TView.StartTriggerAnimation(const AInstance: TFmxObject;
   const ATrigger: string);
 begin
-  // inherited; disable all effect
+  DisableDisappear := True;
+  try
+    inherited;
+  finally
+    DisableDisappear := False;
+  end;
 end;
 
 procedure TView.StartTriggerAnimationWait(const AInstance: TFmxObject;
   const ATrigger: string);
 begin
-  // inherited; disable all effect
+  DisableDisappear := True;
+  try
+    inherited;
+  finally
+    DisableDisappear := False;
+  end;
 end;
 
 procedure TView.StartWindowDrag;
@@ -5785,9 +5876,6 @@ var
           Continue;
         end;
       end;
-
-      if (Control.Align = TALignLayout.None) or (csLoading in Control.ComponentState) then
-        Continue;
 
       List.Add(Control);
     end;
@@ -7557,11 +7645,7 @@ begin
       Result.Canvas.EndScene;
     end;
   finally
-    {$IFDEF NEXTGEN}
     FreeAndNil(AIds);
-    {$ELSE}
-    AIds.Free;
-    {$ENDIF}
   end;
 end;
 
@@ -7594,7 +7678,7 @@ begin
       TViewAccessoryType.Detail: Add(LoadFromResource('ICON_DETAIL')); // Add(GetAccessoryFromResource('listviewstyle.accessorydetail'));
       TViewAccessoryType.Ellipses: Add(LoadFromResource('ICON_Ellipses')); //AddEllipsesAccessory;
       TViewAccessoryType.Flag: Add(LoadFromResource('icon_Flag')); //AddFlagAccessory;
-      TViewAccessoryType.Back: AddBackAccessory;// Add(GetAccessoryFromResource('backtoolbutton.icon'));
+      TViewAccessoryType.Back: Add(LoadFromResource('ICON_BACK')); //AddBackAccessory;// Add(GetAccessoryFromResource('backtoolbutton.icon'));
       TViewAccessoryType.Refresh: Add(LoadFromResource('ICON_REFRESH')); // Add(GetAccessoryFromResource('refreshtoolbutton.icon'));
       TViewAccessoryType.Action: Add(LoadFromResource('ICON_ACTION')); // Add(GetAccessoryFromResource('actiontoolbutton.icon'));
 
@@ -8549,9 +8633,9 @@ procedure TDrawableBrush.Draw(Canvas: TCanvas; const R: TRectF;
 begin
   if (csDestroying in ComponentState) or IsEmpty then Exit;
   if (Ord(FBrush.Kind) = Ord(TViewBrushKind.Patch9Bitmap)) and (FBrush is TViewBrush) then begin
-    TDrawableBase.FillRect9Patch(Canvas, R, XRadius, YRadius, ACorners, AOpacity, TViewBrush(FBrush), ACornerType);
+    TDrawableBase.FillRect9Patch(Canvas, R, GetRadius(XRadius, R), GetRadius(YRadius, R), ACorners, AOpacity, TViewBrush(FBrush), ACornerType);
   end else
-    Canvas.FillRect(R, XRadius, YRadius, ACorners, AOpacity, FBrush, ACornerType);
+    Canvas.FillRect(R, GetRadius(XRadius, R), GetRadius(YRadius, R), ACorners, AOpacity, FBrush, ACornerType);
   if Assigned(FImageLink.Images) and (ImageIndex >= 0) then
     DrawImage(ImageIndex);
 end;
@@ -8837,9 +8921,9 @@ var
       end;
 
       if Flag = 0 then begin
-        TextSet.WordWrap := True;
+        TextSet.FLayout.WordWrap := True;
         DrawText(LText, Item, LColor, X, Y, S);
-        TextSet.WordWrap := False;
+        TextSet.FLayout.WordWrap := False;
       end else begin
         TextSet.TextSize(LText, S, LScale, MW - X, True);
         X := X + S.Width;
@@ -8893,7 +8977,7 @@ var
     end;
   end;
 
-  procedure ClacWordWarpTextSize(var S: TSizeF);
+  procedure ClacWordWarpTextSize(var S: TSizeF; SS: TSizeF);
   var
     I: Integer;
     LText: string;
@@ -8911,7 +8995,10 @@ var
       if Item.Len = 0 then Continue;
 
       if (Item.Len = 1) and (Item.P^ = #13) then begin
-        Y := Y + S.Height;
+        if I = 0 then
+          Y := Y + SS.Height
+        else
+          Y := Y + S.Height;
         X := 0;
         Continue;
       end;
@@ -8937,7 +9024,7 @@ var
   I: Integer;
   Item: THtmlTextItem;
   X, Y, LX: Single;
-  S: TSizeF;
+  S, LTotalSize: TSizeF;
   LColor: TAlphaColor;
   LWordWarp, LVCenter: Boolean;
   LFontChange: TNotifyEvent;
@@ -8959,31 +9046,31 @@ begin
     FFont := TFont.Create;
   FFont.Assign(TextSet.Font);
 
+  TextSet.TextSize('yh中', S, LScale);
   if LWordWarp then begin
-    TextSet.TextSize('yh中', S, LScale);
     CharW := S.Width / 4;
     CharH := S.Height;
   end;
 
   if LVCenter or (ASize <> nil) then begin
-    ClacWordWarpTextSize(S);
+    ClacWordWarpTextSize(LTotalSize, S);
   end else begin
-    TextSet.CalcTextObjectSize(FText, $FFFFFF, LScale, nil, S);
+    TextSet.CalcTextObjectSize(FText, $FFFFFF, LScale, nil, LTotalSize);
   end;
 
   if ASize <> nil then begin
     // 测算高度
-    ASize.Width := S.Width;
-    ASize.Height := S.Height;
+    ASize.Width := LTotalSize.Width;
+    ASize.Height := LTotalSize.Height;
 
-    TextSet.WordWrap := LWordWarp;
+    TextSet.FLayout.WordWrap := LWordWarp;
     TextSet.Font.Assign(FFont);
     TextSet.Font.OnChanged := LFontChange;
 
     Exit;
   end;
 
-  UpdateXY(X, Y, S);
+  UpdateXY(X, Y, LTotalSize);
   if LWordWarp then begin
     if X < R.Left then X := R.Left;
     if Y < R.Top then Y := R.Top;
@@ -9027,7 +9114,6 @@ begin
         DrawText(LText, Item, LColor, X, Y, S);
       end;
     end;
-
   finally
     TextSet.WordWrap := LWordWarp;
     TextSet.Font.Assign(FFont);
@@ -9213,38 +9299,38 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
   var
     P, PE: PChar;
   begin
-    if LText = 'b' then
+    if SameText(LText, 'b') then
       Include(Item.Style, TFontStyle.fsBold)
-    else if LText = 'i' then
+    else if SameText(LText, 'i') then
       Include(Item.Style, TFontStyle.fsItalic)
-    else if LText = 'u' then
+    else if SameText(LText, 'u') then
       Include(Item.Style, TFontStyle.fsUnderline)
-    else if LText = 's' then
+    else if SameText(LText, 's') then
       Include(Item.Style, TFontStyle.fsStrikeOut)
-    else if (LText = 'em') or (LText = 'strong') then begin
+    else if SameText(LText, 'em') or SameText(LText, 'strong') then begin
       Include(Item.Style, TFontStyle.fsItalic);
       Include(Item.Style, TFontStyle.fsBold);
     end else begin
       P := PChar(LText);
       PE := P + Length(LText);
 
-      if StrLComp(P, 'font', 4) = 0 then begin  // font
+      if StrLIComp(P, 'font', 4) = 0 then begin  // font
         Inc(P, 4);
         ReadProperty(Item, P, PE,
           procedure (var Item: THtmlTextItem; const Key, Value: string)
           begin
-            if Key = 'color' then
+            if SameText(Key, 'color') then
               Item.Color := HtmlColorToColor(Value)
-            else if (Key = PStyle) and (Value <> '') then
+            else if SameText(Key, PStyle) and (Value <> '') then
               ReadStyleProperty(Item, Value);
           end
         );
-      end else if StrLComp(P, 'a ', 2) = 0 then begin  // a 超链接
+      end else if StrLIComp(P, 'a ', 2) = 0 then begin  // a 超链接
         Inc(P, 1);
         ReadProperty(Item, P, PE,
           procedure (var Item: THtmlTextItem; const Key, Value: string)
           begin
-            if Key = 'href' then begin
+            if SameText(Key, 'href') then begin
               if not Assigned(FLinkHrefs) then
                 FLinkHrefs := TStringList.Create;
               Item.LinkURL := FLinkHrefs.IndexOf(Value);
@@ -9254,53 +9340,52 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
               end;
               Item.Link := FLinkRangeCount;
               Inc(FLinkRangeCount);
-            end else if Key = 'color' then
+            end else if SameText(Key, 'color') then
               Item.Color := HtmlColorToColor(Value)
-            else if (Key = PStyle) and (Value <> '') then
+            else if SameText(Key, PStyle) and (Value <> '') then
               ReadStyleProperty(Item, Value);
           end
         );
-      end else if StrLComp(P, 'span ', 5) = 0 then begin  // span
+      end else if StrLIComp(P, 'span ', 5) = 0 then begin  // span
         Inc(P, 4);
         ReadProperty(Item, P, PE,
           procedure (var Item: THtmlTextItem; const Key, Value: string)
           begin
-            if Key = PStyle then
+            if SameText(Key, PStyle) then
               ReadStyleProperty(Item, Value);
           end
         );
-      end else if StrLComp(P, 'div ', 3) = 0 then begin  // div
+      end else if StrLIComp(P, 'div ', 4) = 0 then begin  // div
         Inc(P, 3);
         ReadProperty(Item, P, PE,
           procedure (var Item: THtmlTextItem; const Key, Value: string)
           begin
-            if (Key = PStyle) and (Value <> '') then
+            if SameText(Key, PStyle) and (Value <> '') then
               ReadStyleProperty(Item, Value);
           end
         );
-      end else if StrLComp(P, 'p ', 2) = 0 then begin  // p
+      end else if StrLIComp(P, 'p ', 2) = 0 then begin  // p
         Inc(P, 1);
         ReadProperty(Item, P, PE,
           procedure (var Item: THtmlTextItem; const Key, Value: string)
           begin
-            if (Key = PStyle) and (Value <> '') then
+            if SameText(Key, PStyle) and (Value <> '') then
               ReadStyleProperty(Item, Value);
           end
         );
-      end else if (P^ = 'h') and (PE - P > 1) and (P[1] > '0') and (P[1] < '9') then begin  // h1, h2, h3, ... , h9
+      end else if (StrLIComp(P, 'h', 1) = 0) and (PE - P > 1) and (P[1] > '0') and (P[1] < '9') then begin  // h1, h2, h3, ... , h9
         Inc(P, 2);
         Include(Item.Style, TFontStyle.fsBold);
         if PE - P > 0 then begin
           ReadProperty(Item, P, PE,
             procedure (var Item: THtmlTextItem; const Key, Value: string)
             begin
-              if (Key = PStyle) and (Value <> '') then
+              if SameText(Key, PStyle) and (Value <> '') then
                 ReadStyleProperty(Item, Value);
             end
           );
         end;
       end;
-
     end;
   end;
 
@@ -9331,6 +9416,22 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
       Exit;
     SetItem(Item, LText);
     List.Items[I] := Item;
+  end;
+
+  function IsToken(S: string): Boolean;
+  begin
+    Result := False;
+    if S = '' then
+      Exit;
+    Result := SameText(S, 'p') or SameText(S, 'div') or SameText(S, 'li') or ((Length(S) = 2) and SameText(PChar(S)^, 'h'));
+  end;
+
+  function IsLineBreak(S: string): Boolean;
+  begin
+    Result := False;
+    if S = '' then
+      Exit;
+    Result := SameText(S, 'br') or SameText(S, 'br/') or SameText(S, 'br /');
   end;
 
   procedure ParseText(var P, PE: PChar; const AFlag: string);
@@ -9364,11 +9465,10 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
           if (P2 = nil) or (P2 = P1) then
             Break;
           SetString(LS, P1, P2 - P1);
-          LS := LowerCase(LS);
           P1 := PChar(LS);
-          if (StrLComp(P1, 'div', 3) = 0) or (StrLComp(P1, 'p', 1) = 0) or (StrLComp(P1, 'li', 2) = 0) then begin
+          if (StrLIComp(P1, 'div', 3) = 0) or (StrLIComp(P1, 'p', 1) = 0) or (StrLIComp(P1, 'li', 2) = 0) then begin
             AddItem(PLineBreak, 1, '');
-          end else if P1^ = 'h' then begin
+          end else if StrLIComp(P1, 'h', 1) = 0 then begin
             Inc(P1);
             if (P1^ > '0') and (P1^ < '9') then begin
               AddItem(PLineBreak, 1, '');
@@ -9377,7 +9477,6 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
           Break;
         end else
           LS := '';
-
       end else if NeedBreak then begin
         Break;
       end else if (P = P1) and (AFlag = '') then
@@ -9390,20 +9489,15 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
 
       if LS = '' then begin
         SetString(LS, P, P1 - P);
-        LS := LowerCase(LS);
       end else begin
         SkipSpace(P);
         if P^ = '/' then begin
           Inc(P);
           SetString(LE, P, P1 - P);
-          LE := LowerCase(LE);
           if (LE = LS) or ((Length(LS) > Length(LE)) and (Pos(LE + ' ', LS) > 0)) then begin
             AddItem(P2, P - P2 - 2, LS);
-            if LE <> '' then begin
-              if (LE = 'p') or (LE = 'div') or (LE = 'li') or ((Length(LE) = 2) and (PChar(LE)^ = 'h')) then begin
-                AddItem(PLineBreak, 1, LS);
-              end;
-            end;
+            if IsToken(LE) then
+              AddItem(PLineBreak, 1, LS);
           end;
           P := P1 + 1;
           if P1^ <> '>' then
@@ -9413,10 +9507,16 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
           NeedBreak := True;
           Continue;
         end else begin
-          SetString(LE, P, P1 - P);
-          LE := LowerCase(Trim(LE));
+          // 嵌套前内容
+          if (P <> P2 + 1) then begin        
+            AddItem(P2, P - P2 - 1, LS);
+            AddItem(PLineBreak, 1, LS);
+          end;
 
-          if LE = 'br' then begin // 换行
+          SetString(LE, P, P1 - P);
+          LE := Trim(LE);
+
+          if IsLineBreak(LE) then begin // 换行
             AddItem(PLineBreak, 1, LS);
             LS := '';
             P := P1 + 1;
@@ -9438,17 +9538,15 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
 
       P := P1 + 1;
 
-      if LS = 'br' then begin // 换行
+      if IsLineBreak(LS) then begin // 换行
         AddItem(PLineBreak, 1, LS);
         SkipSpace(P);
         LS := '';
         Continue;
       end else begin
-        if LE <> '' then begin
-          if (LE = 'p') or (LE = 'div') or (LE = 'li') or ((Length(LE) = 2) and (PChar(LE)^ = 'h')) then begin
-            AddItem(PLineBreak, 1, LS);
-            NeedBreak := False;
-          end;
+        if IsToken(LE) then begin
+          AddItem(PLineBreak, 1, LS);
+          NeedBreak := False;
         end;
 
         SIndex := List.Count;
@@ -9459,7 +9557,6 @@ procedure TViewHtmlText.ParseHtmlText(const Text: string);
 
         SkipSpace(P);
       end;
-
     end;
   end;
 

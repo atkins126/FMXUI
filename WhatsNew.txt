@@ -1,9 +1,30 @@
 ﻿FMXUI  (YangYxd)
 
 [Current Version]
-  2020.05.28.001
+  2021.03.19.001
 
 [Update History]
+ - -----------------------------------
+ - 2021.03.19.001
+ * [Added]   Compatible with 10.4
+ * [Added]   Transparent statusbar in Android (Thanks for code: 谭钦 report: 意帆, Udcover, 凌风)
+ * [Added]   Resume & Pause to TFrameView
+ * [Added]   New layout demo
+ * [Added]   New ModernList for ListviewEx
+ * [Added]   TImageView allow TViewSize.WrapContent, both sides equal autosize, single side will strech with keeping aspect ratio
+ * [Added]   Improve TGridView footer and new demo (Thanks for code: CCC)
+ * [Added]   Radius value between -1 and 1, the real value will be part of the shortest side
+ * [Changed] TDialogView block vkEscape and vkHardwareBack, even if Cancelable is false
+ * [Fixed]   TDialogView can't free in some situation, due to TabStopController
+ * [Fixed]   Draw HtmlText error (Thanks for report: keven)
+ * [Fixed]   Draw TTextView error while scrolling (Thanks for report: 意帆)
+ * [Fixed]   Minior fixes (Thanks for report: 意帆 and keven)
+ * [Fixed]   Destroy error when 10.4 TMemo in TFrame (Thanks for report: 恢弘)
+ * [Fixed]   Statusbar error when 10.4 (Thanks for report: Udcover)
+ * [Fixed]   Compile error when targeting at linux (Thanks for code: CCC)
+ * [Fixed]   TEditView position error (Thanks for code: 凌风)
+ * [Fixed]   When TDBGridView.MinRowCount > 0, the last blank row will be filled by the last row data (Thanks for report: Jasper)
+ * [Fixed]   TViewAccessoryType.Back cause app start failed when using 10.3 and Android 5.1 (Thanks for report: 微笑的卡列宁)
  - -----------------------------------
  - 2020.05.28
  * [Added]   Shadow of TDialogView
@@ -36,9 +57,9 @@
  * Fix TSizeForm not work well with scale(Thanks for report:ying32)
  * Fix TListViewEx子View.Background.ItemDefault.Kind = TViewBrushKind.None HotOver of Child View do not refresh(Thanks for report:ying32)
  * Tweak TCameraViewer(Thanks for report:凌风)
- * Tweak TListViewEx，TStringGridView(Thanks for report:惠子，Udcover，[东莞]围墙)
- * Tweak Grid，add EnableControls/DisableControls(Thanks for code：惠子)
- * Tweak InstallApk，compatible with Android 8 or higher(Thanks for code：CodeCoolie)
+ * Tweak TListViewEx, TStringGridView(Thanks for report:惠子, Udcover, [东莞]围墙)
+ * Tweak Grid, add EnableControls/DisableControls(Thanks for code：惠子)
+ * Tweak InstallApk, compatible with Android 8 or higher(Thanks for code：CodeCoolie)
  - -----------------------------------
  - 2019.10.23
  * add pull action to THorzScrollView

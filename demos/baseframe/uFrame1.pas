@@ -43,6 +43,8 @@ type
     procedure DoCreate(); override;
     procedure DoFree(); override;
     procedure DoShow(); override;
+    procedure DoResume; override;
+    procedure DoPause; override;
   public
     { Public declarations }
   end;
@@ -77,7 +79,8 @@ begin
 
   AddItem('OnInit', TViewAccessoryType.Pagecurl, TAlphaColorRec.Green);
   AddItem('OnReturn', TViewAccessoryType.Refresh, TAlphaColorRec.Blue);
-  AddItem('OnCallback', TViewAccessoryType.Password, TAlphaColorRec.Gray);
+  AddItem('OnCallback', TViewAccessoryType.Password, TAlphaColorRec.Black);
+  AddItem('StatusBar', TViewAccessoryType.Info, TAlphaColorRec.Black);
   AddItem('Exit', TViewAccessoryType.Exit, TAlphaColorRec.Crimson);
   FAdapter.NotifyDataChanged;
 end;
@@ -89,6 +92,20 @@ begin
   ListViewEx1.Adapter := nil;
   FAdapter := nil;
   FreeAndNil(FList);
+end;
+
+procedure TFrame1.DoPause;
+begin
+  Hint('TFrame1.DoPause');
+
+  inherited;
+end;
+
+procedure TFrame1.DoResume;
+begin
+  inherited;
+
+  Hint('TFrame1.DoResume');
 end;
 
 procedure TFrame1.DoShow;
@@ -107,6 +124,7 @@ begin
     with TFrame2(TFrame2.ShowMainFrame) do begin
       Hint('Callback demo, please click the button');
       BackColor := FList[ItemIndex].Color;
+      StatusColor := FList[ItemIndex].Color;
       tvTitle.Text := FList[ItemIndex].TiTle;
       EnableLogin := True;
       OnLogin := procedure (AView: TFrame; AUserName, APassword: string) begin
@@ -123,6 +141,7 @@ begin
   else if FList[ItemIndex].TiTle = 'OnReturn' then begin
     with TFrame2(TFrame2.ShowMainFrame) do begin
       BackColor := FList[ItemIndex].Color;
+      StatusColor := FList[ItemIndex].Color;
       tvTitle.Text := FList[ItemIndex].TiTle;
     end;
   end
@@ -131,9 +150,20 @@ begin
       procedure (View: TFrameView) begin
         with TFrame2(View) do begin
           BackColor := FList[ItemIndex].Color;
+          StatusColor := FList[ItemIndex].Color;
           tvTitle.Text := FList[ItemIndex].TiTle;
         end;
       end)
+  end
+  else if FList[ItemIndex].TiTle = 'StatusBar' then begin
+    if BackColor = TAlphaColorRec.Gray then
+      BackColor := TAlphaColorRec.Whitesmoke
+    else
+      BackColor := TAlphaColorRec.Gray;
+
+    TFrameView.SetDefaultStatusLight(BackColor <> TAlphaColorRec.Gray);
+    TFrameView.SetDefaultStatusTransparent(True);
+    StatusColor := BackColor;
   end;
 end;
 

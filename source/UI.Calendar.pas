@@ -14,8 +14,9 @@ uses
   UI.Base, UI.Utils, UI.Ani, UI.Standard, UI.Calendar.Data,
   FMX.Effects, FMX.Text, FMX.Pickers,
   {$IFDEF MSWINDOWS}Windows, UI.Debug, {$ENDIF}
-  {$IFDEF MSWINDOWS} FMX.DateTimeCtrls, {$ENDIF}
+  {$IFDEF MSWINDOWS}FMX.DateTimeCtrls, {$ENDIF}
   {$IFDEF MACOS}FMX.DateTimeCtrls, {$ENDIF}
+  {$IFDEF LINUX}FMX.DateTimeCtrls, {$ENDIF}
   FMX.Objects, System.Math, System.Actions, System.DateUtils, FMX.Consts,
   System.TypInfo, FMX.Graphics, System.Generics.Collections, FMX.TextLayout,
   System.Classes, System.Types, System.UITypes, System.SysUtils, System.Math.Vectors,
@@ -616,7 +617,7 @@ type
     function GetDateTime: TDateTime;
     procedure SetDateTime(const Value: TDateTime);
   protected
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     FDateTimePicker: TCustomDateTimePicker;
     {$ELSE}
     [Weak] FLanguage: ICalendarLanguage;
@@ -673,7 +674,7 @@ type
   protected
   public
     constructor Create(AOwner: TComponent); override;
-    {$IFNDEF NEXTGEN}
+    {$IF not Defined(ANDROID) and not Defined(IOS)}
     procedure DoTimeChange(Sender: TObject);
     procedure OpenPicker; override;
     procedure ClosePicker; override;
@@ -2937,7 +2938,7 @@ end;
 procedure TCustomDateTimeView.ClosePicker;
 begin
   if HasPicker and IsShow then begin
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     FDateTimePicker.Hide;
     {$ELSE}
     TDialog.CloseDialog(FDateTimePicker);
@@ -2946,7 +2947,7 @@ begin
 end;
 
 constructor TCustomDateTimeView.Create(AOwner: TComponent);
-{$IFDEF NEXTGEN}
+{$IF Defined(ANDROID) or Defined(IOS)}
 var
   PickerService: IFMXPickerService;
 {$ENDIF}
@@ -2958,7 +2959,7 @@ begin
 
   if not (csDesigning in ComponentState) then begin
 
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     if TPlatformServices.Current.SupportsPlatformService(IFMXPickerService, PickerService)
     then
     begin
@@ -2979,7 +2980,7 @@ end;
 
 destructor TCustomDateTimeView.Destroy;
 begin
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   ClosePicker;
   {$ELSE}
   ClosePicker;
@@ -2988,7 +2989,7 @@ begin
   inherited;
 end;
 
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 procedure TCustomDateTimeView.DoClickDateTimeView(Sender: TObject;
   const ID: Integer);
 begin
@@ -3030,7 +3031,7 @@ end;
 
 procedure TCustomDateTimeView.InitPicker;
 begin
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   FDateTimePicker.Date := DateTime;
   {$ELSE}
   if FDateTimePicker = nil then begin
@@ -3062,11 +3063,11 @@ end;
 
 function TCustomDateTimeView.IsShow: Boolean;
 begin
-  Result := {$IFDEF NEXTGEN}FDateTimePicker.IsShown{$ELSE}FIsShow{$ENDIF};
+  Result := {$IF Defined(ANDROID) or Defined(IOS)}FDateTimePicker.IsShown{$ELSE}FIsShow{$ENDIF};
 end;
 
 procedure TCustomDateTimeView.OpenPicker;
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 var
   Dlg: TDialog;
 {$ENDIF}
@@ -3075,7 +3076,7 @@ begin
     InitPicker;
   if HasPicker and not IsShow then
   begin
-    {$IFDEF NEXTGEN}
+    {$IF Defined(ANDROID) or Defined(IOS)}
     FDateTimePicker.PreferedDisplayIndex :=
       Screen.DisplayFromPoint(Screen.MousePos).Index;
     FDateTimePicker.Show;
@@ -3107,7 +3108,7 @@ begin
   inherited;
 
   FDateTimeFormat := FormatSettings.ShortDateFormat;
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   if HasPicker then
     FDateTimePicker.ShowMode := TDatePickerShowMode.Date;
   {$ENDIF}
@@ -3116,14 +3117,14 @@ end;
 
 function TDateView.GetLanguage: ICalendarLanguage;
 begin
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   Result := FLanguage;
   {$ENDIF}
 end;
 
 procedure TDateView.SetLanguage(const Value: ICalendarLanguage);
 begin
-  {$IFNDEF NEXTGEN}
+  {$IF not Defined(ANDROID) and not Defined(IOS)}
   FLanguage := Value;
   {$ENDIF}
 end;
@@ -3135,14 +3136,14 @@ begin
   inherited;
 
   FDateTimeFormat := FormatSettings.ShortTimeFormat;
-  {$IFDEF NEXTGEN}
+  {$IF Defined(ANDROID) or Defined(IOS)}
   if HasPicker then
     FDateTimePicker.ShowMode := TDatePickerShowMode.Time;
   {$ENDIF}
   DateTime := Now;
 end;
 
-{$IFNDEF NEXTGEN}
+{$IF not Defined(ANDROID) and not Defined(IOS)}
 procedure TTimeView.DoTimeChange(Sender: TObject);
 begin
   if Assigned(Self) then

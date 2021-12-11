@@ -32,6 +32,7 @@ type
     ButtonView9: TButtonView;
     ButtonView16: TButtonView;
     ButtonView17: TButtonView;
+    ButtonView18: TButtonView;
     procedure TextView17Click(Sender: TObject);
     procedure ButtonView1Click(Sender: TObject);
     procedure ButtonView2Click(Sender: TObject);
@@ -51,6 +52,7 @@ type
     procedure ButtonView5Click(Sender: TObject);
     procedure ButtonView16Click(Sender: TObject);
     procedure ButtonView17Click(Sender: TObject);
+    procedure ButtonView18Click(Sender: TObject);
   private
     { Private declarations }
   protected
@@ -69,7 +71,7 @@ uses
   uFrameHorzScrollView,
   uFrameVertScrollView,
   uFrameCameraViewer,
-  uFrameGridView,
+  uFrameGridView, uFrameGridSum,
   uFrameImageViewer,
   uFrameListViewGroup,
   uFrameImageView,
@@ -99,12 +101,12 @@ begin
         TFrameAniType.RightSlideMenu);
     end;
     2: begin
-      TDialog.ShowView(Self, TView(Sender), TFramePopMenu, 0, 0,
+      TDialog.ShowView(Self, nil, TFramePopMenu, 0, 0,
         TDialogViewPosition.Top, True,
         TFrameAniType.TopMoveInOut).RootView.Controls[0].Align := TAlignLayout.Top;
     end;
     3: begin
-      TDialog.ShowView(Self, TView(Sender), TFramePopMenu, 0, 0,
+      TDialog.ShowView(Self, nil, TFramePopMenu, 0, 0,
         TDialogViewPosition.Bottom, True,
         TFrameAniType.BottomMoveInOut).RootView.Controls[0].Align := TAlignLayout.Bottom;
     end;
@@ -147,6 +149,11 @@ begin
   StartFrame(TFrameDateView)
 end;
 
+procedure TFrame1.ButtonView18Click(Sender: TObject);
+begin
+  StartFrame(TFrameGridSum);
+end;
+
 procedure TFrame1.ButtonView1Click(Sender: TObject);
 begin
   StartFrame(TFrame2, TButtonView(Sender).Text, TFrameAniType.TopMoveInOut);
@@ -159,7 +166,7 @@ end;
 
 procedure TFrame1.ButtonView3Click(Sender: TObject);
 begin
-  StartFrame(TFrmaeDialog, TButtonView(Sender).Text, TFrameAniType.FadeInOut)
+  StartFrame(TFrameDialog, TButtonView(Sender).Text, TFrameAniType.FadeInOut)
 end;
 
 procedure TFrame1.ButtonView4Click(Sender: TObject);

@@ -33,8 +33,13 @@ uses
 
 procedure TForm1.FormCreate(Sender: TObject);
 begin
-  TFrameView.SetDefaultStatusColor($ff800080);
-  //TFrameView.SetDefaultBackColor($fff1f2f3);
+  // use android transparent statusbar new method
+  TFrameView.SetStatusTransparentNewMethod(True);
+
+  TFrameView.SetDefaultStatusLight(True);
+  TFrameView.SetDefaultStatusTransparent(True);
+  TFrameView.SetDefaultStatusColor(TAlphaColorRec.Whitesmoke);
+  TFrameView.SetDefaultBackColor(TAlphaColorRec.Whitesmoke);
 end;
 
 procedure TForm1.FormShow(Sender: TObject);
