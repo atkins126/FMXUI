@@ -262,7 +262,7 @@ type
     function GetColumnWidths(const ACol: Integer): Single;
   protected
     FShowColIndex: Boolean;
-    function GetItemOfKey(const Key: Int64): TGridColumnItem;
+    function GetItemOfKey(const Key: UInt64): TGridColumnItem;
     procedure DoItemChange(Sender: TObject);
     procedure DoItemChangeEx(Sender: TGridColumnItem; const ACol, ARow: Integer);
     procedure DoChange(); virtual;
@@ -1872,10 +1872,7 @@ end;
 
 function TGridBase.CreateScroll: TScrollBar;
 begin
-  if CanDragScroll then
-    Result := TSmallScrollBar.Create(Self)
-  else
-    Result := TScrollBar.Create(Self);
+  Result := inherited;
   Result.Cursor := crArrow;
 end;
 
@@ -5207,7 +5204,7 @@ end;
 
 function TGridViewContent.ObjectAtPoint(AScreenPoint: TPointF): IControl;
 begin
-  if Assigned(GridView.FAniCalculations) and (GridView.FAniCalculations.Shown) then
+  if GridView.IsDragScrolling then
     Result := nil   // 手势滚动中，不允许点击子项
   else
     Result := inherited ObjectAtPoint(AScreenPoint);
@@ -5468,7 +5465,7 @@ end;
 function TGridAdapterBase.GetCellSettings(const ACol, ARow: Integer;
   out ACellSettings: TGridCellSettings): Boolean;
 var
-  Key: Int64;
+  Key: UInt64;
 begin
   Key := TGridBase.GetKey(ACol, ARow);
   if FCellSetttings.ContainsKey(Key) then begin
@@ -5812,7 +5809,7 @@ procedure TGridColumnItem.SetIndex(const Value: Integer);
 var
   ARow, ACol, NewCol: Integer;
   I: Integer;
-  Key: Int64;
+  Key: UInt64;
   Item, LItem: TGridColumnItem;
   //LNotify: TCollectionNotifyEvent<TGridColumnItem>;
   LNotify: TYXDIntHashItemFreeNotify;
@@ -5937,7 +5934,7 @@ procedure TGridColumns.Assign(Source: TPersistent);
 var
   Src: TGridColumns;
   I, J: Integer;
-  Key: Int64;
+  Key: UInt64;
   Item: TGridColumnItem;
   LOnChange: TNotifyEvent;
 begin
@@ -6093,7 +6090,7 @@ end;
 
 function TGridColumns.GetItem(const ACol, ARow: Integer): TGridColumnItem;
 var
-  Key: Int64;
+  Key: UInt64;
   V, LMaxRows, LMaxCols: Integer;
 begin
   Key := TGridBase.GetKey(ACol, ARow);
@@ -6219,7 +6216,7 @@ begin
   end;
 end;
 
-function TGridColumns.GetItemOfKey(const Key: Int64): TGridColumnItem;
+function TGridColumns.GetItemOfKey(const Key: UInt64): TGridColumnItem;
 var
   V, LMaxRows, LMaxCols: Integer;
 begin
@@ -6325,7 +6322,7 @@ end;
 procedure TGridColumns.SetItem(const ACol, ARow: Integer;
   const Value: TGridColumnItem);
 var
-  Key: Int64;
+  Key: UInt64;
   V: Integer;
 begin
   Key := TGridBase.GetKey(ACol, ARow);
@@ -6671,10 +6668,6 @@ var
   I, J, LCount: Integer;
   // LDataSet: TDataSet;
   Item: TGridColumnItem;
-  List: TArray<TGridColumnItem>;
-  ListValue: TArray<Extended>;
-  ListType: TArray<Byte>;
-  B: Boolean;
 begin
   if not(gvFixedFooter in FOptions) then
     Exit;
@@ -7946,7 +7939,7 @@ procedure TGridColumnsSetting.WriteCollumnsData(Writer: TWriter);
 var
   List, DataItem: TJSONobject;
   I, J: Integer;
-  Key: Int64;
+  Key: UInt64;
   Item: TGridColumnItem;
 begin
   List := TJSONObject.Create;

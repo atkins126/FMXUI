@@ -177,6 +177,7 @@ type
     FUseDefaultStatusLight: Boolean;
     FUseDefaultStatusTransparent: Boolean;
     FOnShow: TNotifyEvent;
+    FOnShown: TNotifyEvent;
     FOnHide: TNotifyEvent;
     FOnFinish: TNotifyEvent;
     FOnReStart: TNotifyEvent;
@@ -230,6 +231,10 @@ type
     /// Frame 正在显示之前触发
     /// </summary>
     procedure DoShow(); virtual;
+    /// <summary>
+    /// Frame 完全显示之后触发
+    /// </summary>
+    procedure DoShown(); virtual;
     /// <summary>
     /// Frame 隐藏显示时触发 (尽量使用 DoFinish )
     /// </summary>
@@ -453,7 +458,7 @@ type
     /// <summary>
     /// 暂停当前Frame
     /// </summary>
-    procedure Pause(AFinish: Boolean = False); virtual;
+    procedure Pause(AResume: Boolean = False); virtual;
 
     /// <summary>
     /// 启动时的参数
@@ -526,6 +531,7 @@ type
     property StatusLight: Boolean read GetStatusLight write SetStatusLight;
 
     property OnShow: TNotifyEvent read FOnShow write FOnShow;
+    property OnShown: TNotifyEvent read FOnShown write FOnShown;
     property OnHide: TNotifyEvent read FOnHide write FOnHide;
     property OnFinish: TNotifyEvent read FOnFinish write FOnFinish;
     property OnReStart: TNotifyEvent read FOnReStart write FOnReStart;
@@ -718,6 +724,8 @@ end;
 
 procedure TFrameView.AnimatePlay(Ani: TFrameAniType; IsIn, SwitchFlag: Boolean;
   AEvent: TNotifyEventA);
+var
+  LEvent: TNotifyEventA;
 
   // 淡入淡出
   procedure DoFadeInOut();
@@ -727,22 +735,22 @@ procedure TFrameView.AnimatePlay(Ani: TFrameAniType; IsIn, SwitchFlag: Boolean;
     if IsIn then begin
       if SwitchFlag then begin
         Self.Opacity := 1;
-        TFrameAnimator.DelayExecute(Self, AEvent, 0.2);
+        TFrameAnimator.DelayExecute(Self, LEvent, 0.2);
       end else begin
         NewValue := 1;
-        TFrameAnimator.AnimateFloat(Self, 'Opacity', NewValue, AEvent, 0.2);
+        TFrameAnimator.AnimateFloat(Self, 'Opacity', NewValue, LEvent, 0.2);
       end;
     end else begin
       if FinishIsFreeApp then begin
-        if Assigned(AEvent) then
-          AEvent(Self);
+        if Assigned(LEvent) then
+          LEvent(Self);
         Exit;
       end;
       if SwitchFlag then begin
         NewValue := 0;
-        TFrameAnimator.AnimateFloat(Self, 'Opacity', NewValue, AEvent, 0.2);
+        TFrameAnimator.AnimateFloat(Self, 'Opacity', NewValue, LEvent, 0.2);
       end else begin
-        TFrameAnimator.DelayExecute(Self, AEvent, 0.2);
+        TFrameAnimator.DelayExecute(Self, LEvent, 0.2);
       end;
     end;
   end;
@@ -767,12 +775,12 @@ procedure TFrameView.AnimatePlay(Ani: TFrameAniType; IsIn, SwitchFlag: Boolean;
       else
         NewValue := Self.Width - 1; //旧的frame向左隐藏
       if FinishIsFreeApp then begin
-        if Assigned(AEvent) then
-          AEvent(Self);
+        if Assigned(LEvent) then
+          LEvent(Self);
         Exit;
       end;
     end;
-    TFrameAnimator.AnimateFloat(Self, 'Position.X', NewValue, AEvent);
+    TFrameAnimator.AnimateFloat(Self, 'Position.X', NewValue, LEvent);
   end;
 
   // 顶部移入移出, 右边进入
@@ -789,19 +797,19 @@ procedure TFrameView.AnimatePlay(Ani: TFrameAniType; IsIn, SwitchFlag: Boolean;
         LForm := Self.ParentForm;
         if Assigned(LForm) then
           Y := LForm.Padding.Top;
-        TFrameAnimator.AnimateFloat(Self, 'Position.Y', Y, AEvent);
-      end else if Assigned(AEvent) then
-        TFrameAnimator.DelayExecute(Self, AEvent, 0.2);
+        TFrameAnimator.AnimateFloat(Self, 'Position.Y', Y, LEvent);
+      end else if Assigned(LEvent) then
+        TFrameAnimator.DelayExecute(Self, LEvent, 0.2);
     end else begin
       if FinishIsFreeApp then begin
-        if Assigned(AEvent) then
-          AEvent(Self);
+        if Assigned(LEvent) then
+          LEvent(Self);
         Exit;
       end;
       if SwitchFlag then
-        TFrameAnimator.AnimateFloat(Self, 'Position.Y', - Self.Height, AEvent, 0.1)
-      else if Assigned(AEvent) then
-        TFrameAnimator.DelayExecute(Self, AEvent, 0.65);
+        TFrameAnimator.AnimateFloat(Self, 'Position.Y', - Self.Height, LEvent, 0.1)
+      else if Assigned(LEvent) then
+        TFrameAnimator.DelayExecute(Self, LEvent, 0.65);
     end;
   end;
 
@@ -819,19 +827,19 @@ procedure TFrameView.AnimatePlay(Ani: TFrameAniType; IsIn, SwitchFlag: Boolean;
         LForm := Self.ParentForm;
         if Assigned(LForm) then
           Y := LForm.Padding.Top;
-        TFrameAnimator.AnimateFloat(Self, 'Position.Y', Y, AEvent);
-      end else if Assigned(AEvent) then
-        TFrameAnimator.DelayExecute(Self, AEvent, 0.2);
+        TFrameAnimator.AnimateFloat(Self, 'Position.Y', Y, LEvent);
+      end else if Assigned(LEvent) then
+        TFrameAnimator.DelayExecute(Self, LEvent, 0.2);
     end else begin
       if FinishIsFreeApp then begin
-        if Assigned(AEvent) then
-          AEvent(Self);
+        if Assigned(LEvent) then
+          LEvent(Self);
         Exit;
       end;
       if SwitchFlag then
-        TFrameAnimator.AnimateFloat(Self, 'Position.Y', Self.Height, AEvent, 0.1)
-      else if Assigned(AEvent) then
-        TFrameAnimator.DelayExecute(Self, AEvent, 0.65);
+        TFrameAnimator.AnimateFloat(Self, 'Position.Y', Self.Height, LEvent, 0.1)
+      else if Assigned(LEvent) then
+        TFrameAnimator.DelayExecute(Self, LEvent, 0.65);
     end;
   end;
 
@@ -839,16 +847,28 @@ begin
   if not Assigned(Self) or (csDestroying in ComponentState) then
     Exit;
   try
+    if (Align = TAlignLayout.Client) and (Ani in [TFrameAniType.MoveInOut,
+      TFrameAniType.TopMoveInOut, TFrameAniType.BottomMoveInOut]) then begin
+      Align := TAlignLayout.None;
+      LEvent := procedure (Sender: TObject) begin
+        Align := TAlignLayout.Client;
+        if Assigned(AEvent) then
+          AEvent(Sender);
+      end;
+    end
+    else
+      LEvent := AEvent;
+
     case Ani of
       TFrameAniType.DefaultAni:
         if not (DefaultAnimate in [TFrameAniType.None, TFrameAniType.DefaultAni]) then
-          AnimatePlay(DefaultAnimate, IsIn, SwitchFlag, AEvent)
-        else if Assigned(AEvent) then begin
+          AnimatePlay(DefaultAnimate, IsIn, SwitchFlag, LEvent)
+        else if Assigned(LEvent) then begin
           if IsIn then
             Self.Opacity := 1
           else
             Self.Opacity := 0;
-          AEvent(Self);
+          LEvent(Self);
         end;
       TFrameAniType.FadeInOut:
         DoFadeInOut;
@@ -861,8 +881,8 @@ begin
     else
       begin
         // 无动画效果
-        if Assigned(AEvent) then
-          AEvent(Self);
+        if Assigned(LEvent) then
+          LEvent(Self);
         if IsIn then
           Opacity := 1
         else
@@ -1027,7 +1047,7 @@ begin
 
       Result := Create(Parent);
       Result.Name := '';
-      Result.TagObject := Params;
+      Result.Params := Params;
       Result.Parent := Parent;
       Result.Align := TAlignLayout.Client;
       Result.FLastView := nil;
@@ -1137,7 +1157,7 @@ begin
   end;
 end;
 
-procedure TFrameView.Pause(AFinish: Boolean);
+procedure TFrameView.Pause(AResume: Boolean);
 var
   [Weak] LFrame: TFrameView;
 begin
@@ -1147,19 +1167,21 @@ begin
     Exit;
   FResumed := False;
 
-  if AFinish then begin
+  if AResume then begin
     LFrame := ActiveFrame;
     // Self not Active
     if Assigned(LFrame) and (LFrame <> Self) and (LFrame.FLastView = Self) then
       LFrame.FLastView := FLastView;
-  end;
+  end
+  else
+    LFrame := nil;
 
   DoPause;
 
-  if AFinish then begin
+  if AResume then begin
     if LFrame = Self then
       if Assigned(FLastView) and not FLastView.IsDestroy then
-        FLastView.Resume;
+        FLastView.Show(TFrameAniType.None, nil);
   end;
 end;
 
@@ -1332,7 +1354,6 @@ end;
 
 destructor TFrameView.Destroy;
 var
-  Obj: TObject;
   LFrame: TFrameView;
 begin
   if Assigned(ParentForm) and TFrameView.GetFormActiveFrame(ParentForm, LFrame) and (LFrame = Self) then
@@ -1342,9 +1363,6 @@ begin
 
   DoFree();
   FWaitDialog := nil;
-  Obj := TagObject;
-  if Assigned(Obj) then
-    FreeAndNil(Obj);
   if Assigned(FNextView) then
     FNextView.FLastView := nil;
   FLastView := nil;
@@ -1471,7 +1489,7 @@ end;
 
 procedure TFrameView.DoFinish;
 begin
-  Pause;
+  Pause(False);
   if Assigned(FOnFinish) then begin
     FOnFinish(Self);
     FOnFinish := nil;
@@ -1486,7 +1504,7 @@ end;
 
 procedure TFrameView.DoHide;
 begin
-  Pause;
+  Pause(True);
   if Assigned(FOnHide) then
     FOnHide(Self);
 end;
@@ -1517,6 +1535,12 @@ begin
   if Assigned(FOnShow) then
     FOnShow(Self);
   Resume;
+end;
+
+procedure TFrameView.DoShown;
+begin
+  if Assigned(FOnShown) then
+    FOnShown(Self);
 end;
 
 procedure TFrameView.Finish(Ani: TFrameAniType);
@@ -1597,13 +1621,8 @@ end;
 
 function TFrameView.GetParams: TFrameParams;
 begin
-  if FParams = nil then begin
-    if (TagObject <> nil) and (TagObject is TFrameParams) then begin
-      FParams := TagObject as TFrameParams;
-      TagObject := nil;
-    end else
-      FParams := TFrameParams.Create(9);
-  end;
+  if FParams = nil then
+    FParams := TFrameParams.Create(9);
   Result := FParams;
 end;
 
@@ -1752,8 +1771,8 @@ end;
 
 procedure TFrameView.InternalHide;
 begin
-  DoHide;
   FHideing := True;
+  DoHide;
   Visible := False;
   FHideing := False;
   FNeedHide := False;
@@ -1784,12 +1803,17 @@ begin
   {$ENDIF}
   Opacity := 0;
   FHideing := True;
-  Visible := True;
+  // make sure this is front
+  if not Visible then begin
+    Visible := True;
+    BringToFront;
+  end;
   AnimatePlay(Ani, True, SwitchFlag,
     procedure (Sender: TObject) begin
       FShowing := False;
       if Assigned(AOnFinish) then
         AOnFinish(Sender);
+      DoShown;
     end
   );
   FHideing := False;

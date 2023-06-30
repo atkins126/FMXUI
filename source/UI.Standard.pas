@@ -307,6 +307,7 @@ type
   TPositionChangeEvent = procedure(Sender: TObject; const OldViewportPosition,
     NewViewportPosition: TPointD; const ContentSizeChanged: Boolean) of object;
   PRectD = ^TRectD;
+  TScrollBarClass = class of TScrollBar;
 
   /// <summary>
   /// 滚动视图
@@ -316,6 +317,10 @@ type
     ChangeRepaintedIncidentDelay = 0.1; // seconds
     PhysicsProcessingInterval = 8; // 8 ms for ~120 frames per second
     DefaultScrollingStretchGlowColor: TAlphaColor = $FFC0C0C0;
+  private
+    class var
+      FDefaultScrollbarWidth: Single;
+      FDefaultScrollbarClass: TScrollBarClass;
   private
     FCanAnimation: Boolean;
     FInInternalAlign: Boolean;
@@ -449,6 +454,11 @@ type
 
     property InInternalAlign: Boolean read FInInternalAlign;
   public
+      // 默认滚动条宽度
+    class property DefaultScrollbarWidth: Single read FDefaultScrollbarWidth write FDefaultScrollbarWidth;
+      // 默认滚动条类
+    class property DefaultScrollbarClass: TScrollBarClass read FDefaultScrollbarClass write FDefaultScrollbarClass;
+  public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure ScrollBy(const Dx, Dy: Double);
@@ -456,6 +466,8 @@ type
 
     // 刷新开始
     procedure PullRefreshStart(); virtual;
+    // 是否拖动滚动中
+    function IsDragScrolling: Boolean;
 
     property VScrollBarValue: Double read GetVScrollBarValue write SetVScrollBarValue;
     property HScrollBarValue: Double read GetHScrollBarValue write SetHScrollBarValue;
@@ -516,6 +528,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function PointInObjectLocal(X, Y: Single): Boolean; override;
+    procedure EndUpdate; override;
     property ScrollBox: TScrollView read FScrollBox;
   end;
 
@@ -874,6 +887,7 @@ type
     FAdjustSizeing: Boolean;
     FValueOutTail: string;
     FGravity: TLayoutGravity;
+    FTextValue: string;
     procedure SetValue(const Value: Integer);
     procedure SetMaxValue(const Value: Integer);
     procedure SetTargetView(const Value: IView);
@@ -891,6 +905,7 @@ type
     function GetStyle: TBadgeStyle;
     procedure MarginsChanged(Sender: TObject);
     procedure SetGravity(const Value: TLayoutGravity);
+    procedure SetTextValue(const Value: string);
   protected
     procedure Paint; override;
     procedure Resize; override;
@@ -936,6 +951,10 @@ type
     /// 背景颜色
     /// </summary>
     property Background: TBadgeBackground read FBackground write SetBackground;
+    /// <summary>
+    /// 自定义文本
+    /// </summary>
+    property TextValue: string read FTextValue write SetTextValue;
     /// <summary>
     /// 字体设置
     /// </summary>
@@ -2190,7 +2209,7 @@ end;
 constructor TScrollView.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  FScrollbarWidth := 0;
+  FScrollbarWidth := TScrollView.DefaultScrollbarWidth;
   FContentBounds := nil;
   FShowScrollBars := True;
   FDragScroll := False;
@@ -2211,7 +2230,12 @@ end;
 
 function TScrollView.CreateScroll: TScrollBar;
 begin
-  Result := TSmallScrollBar.Create(Self);
+  if Assigned(TScrollView.DefaultScrollbarClass) then
+    Result := TScrollView.DefaultScrollbarClass.Create(Self)
+  else if CanDragScroll then
+    Result := TSmallScrollBar.Create(Self)
+  else
+    Result := TScrollBar.Create(Self);
 end;
 
 destructor TScrollView.Destroy;
@@ -2656,6 +2680,13 @@ end;
 function TScrollView.IsScrollBarAutoShowing: Boolean;
 begin
   Result :=  Assigned(FAniCalculations) and FAniCalculations.AutoShowing;
+end;
+
+function TScrollView.IsDragScrolling: Boolean;
+begin
+  //todo: FAniCalculations.Shown判断不准确
+  //拖动滚动尚且还好，代码滚动会导致Shown这里不对
+  Result := CanDragScroll and Assigned(FAniCalculations) and (FAniCalculations.Shown);
 end;
 
 function TScrollView.IsStoredScrollbarWidth: Boolean;
@@ -3636,7 +3667,7 @@ begin
     P.Width := Width;
     P.Height := Height;
     case FStyle of
-      TBadgeStyle.NumberText, TBadgeStyle.NewText, TBadgeStyle.HotText:
+      TBadgeStyle.NumberText, TBadgeStyle.NewText, TBadgeStyle.HotText, TBadgeStyle.Text:
         begin
           FText.CalcTextObjectSize(FText.Text, 0, GetSceneScale, nil, P);
           P.Width := P.Width + Padding.Left + Padding.Right;
@@ -3794,6 +3825,7 @@ begin
       end;
     TBadgeStyle.NewText: Result := 'NEW';
     TBadgeStyle.HotText: Result := 'HOT';
+    TBadgeStyle.Text: Result := FTextValue;
   end;
 end;
 
@@ -3949,6 +3981,15 @@ end;
 procedure TBadgeView.SetTextSettings(const Value: TSimpleTextSettings);
 begin
   FText.Assign(Value);
+end;
+
+procedure TBadgeView.SetTextValue(const Value: string);
+begin
+  if FTextValue <> Value then begin
+    FTextValue := Value;
+    FText.Text := GetViewText;
+    Repaint;
+  end;
 end;
 
 { TSimpleTextSettings }
@@ -5738,13 +5779,13 @@ begin
     FDisablePaint := True;
 
     inherited DoRealign;
-    DoRealignContent();
     if Assigned(FAniCalculations) then begin
       LDisableAlign := FDisableAlign;
       FDisableAlign := True;
       RealignContent;
       FDisableAlign := LDisableAlign;
     end;
+    DoRealignContent();
   finally
     FDisablePaint := LDisablePaint;
     FContent.Invalidate;
@@ -5789,6 +5830,8 @@ begin
   case FContent.Orientation of
     TOrientation.Horizontal: ScrollValue := HScrollBarValue;
     TOrientation.Vertical: ScrollValue := VScrollBarValue;
+  else
+    ScrollValue := 0;
   end;
 
   // 下拉刷新
@@ -5996,13 +6039,22 @@ end;
 procedure TPullScrollView.HScrollChange(Sender: TObject);
 var
   H: Single;
+  SaveDisableAlign: Boolean;
 begin
   if FScrolling then Exit;
   inherited HScrollChange(Sender);
   if Assigned(FContent) then begin
     H := Padding.Left - HScrollBarValue;
     DoUpdateHeaderFooter(H);
-    FContent.Position.X := H + FOffsetScroll;
+
+    // Disable align in 11.3
+    SaveDisableAlign := FDisableAlign;
+    FDisableAlign := True;
+    try
+      FContent.Position.X := H + FOffsetScroll;
+    finally
+      FDisableAlign := SaveDisableAlign;
+    end;
   end;
 end;
 
@@ -6332,13 +6384,22 @@ end;
 procedure TPullScrollView.VScrollChange(Sender: TObject);
 var
   V: Single;
+  SaveDisableAlign: Boolean;
 begin
   if FScrolling then Exit;
   inherited VScrollChange(Sender);
   if Assigned(FContent) then begin
     V := Padding.Top - VScrollBarValue;
     DoUpdateHeaderFooter(V);
-    FContent.Position.Y := V + FOffsetScroll;
+
+    // Disable align in 11.3
+    SaveDisableAlign := FDisableAlign;
+    FDisableAlign := True;
+    try
+      FContent.Position.Y := V + FOffsetScroll;
+    finally
+      FDisableAlign := SaveDisableAlign;
+    end;
   end;
 end;
 
@@ -6411,6 +6472,16 @@ begin
     FScrollBox.ContentRemoveObject(AObject);
 end;
 
+procedure TViewScrollContent.EndUpdate;
+begin
+  inherited;
+
+  // 数量减少导致的滚动没有归位的情况
+  // 增加貌似不会有这个情况，但减少会有，待完善
+  if IsContentChanged then
+    DoRealign;
+end;
+
 function TViewScrollContent.GetChildrenRect: TRectF;
 begin
   Result := GetUpdateRect;
@@ -6434,7 +6505,7 @@ end;
 
 function TViewScrollContent.ObjectAtPoint(P: TPointF): IControl;
 begin
-  if Assigned(FScrollBox.FAniCalculations) and (FScrollBox.FAniCalculations.Shown) then
+  if FScrollBox.IsDragScrolling then
     Result := nil   // 手势滚动中，不允许点击子项
   else
     Result := inherited ObjectAtPoint(P);

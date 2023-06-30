@@ -311,7 +311,6 @@ type
     function GetColumnDivider: Boolean;
     procedure SetColumnDivider(const Value: Boolean);
   protected
-    function CreateScroll: TScrollBar; override;
     function GetRealDrawState: TViewState; override;
     function CanRePaintBk(const View: IView; State: TViewState): Boolean; override;
     function IsStoredDividerHeight: Boolean; virtual;
@@ -896,14 +895,6 @@ begin
     RealignContent;
 end;
 
-function TListViewEx.CreateScroll: TScrollBar;
-begin
-  if CanDragScroll then
-    Result := TSmallScrollBar.Create(Self)
-  else
-    Result := TScrollBar.Create(Self);
-end;
-
 destructor TListViewEx.Destroy;
 begin
   FAdapter := nil;
@@ -1452,7 +1443,7 @@ begin
 
   // 如果列表高度为自动大小时，计算一下父级视图的最大高度，在自动调整大小时会使用
   if HeightSize = TViewSize.WrapContent then
-    FContentViews.FMaxParentHeight := GetParentMaxHeight
+    FContentViews.FMaxParentHeight := Min(GetParentMaxHeight, Height)
   else
     FContentViews.FMaxParentHeight := 0;
 
@@ -1471,7 +1462,7 @@ end;
 procedure TListViewEx.ScrollToIndex(const Index: Integer);
 var
   I, J: Integer;
-  Y, DividerH, ItemDefaultH, H: Double;
+  Y, DividerH, ItemDefaultH: Double;
 begin
   if not Assigned(FAdapter) then
     Exit;
@@ -1937,8 +1928,9 @@ procedure TListViewContent.DoRealign;
   begin
     for I := 0 to Parent.ControlsCount - 1 do begin
       Control := Parent.Controls[I];
-      if not Control.Visible then
-        Continue;
+      // Disabled by kngstr
+      //if not Control.Visible then
+      //  Continue;
       if Control.HitTest then begin
         Control.OnClick := DoItemChildClick;
         FItemViews.AddOrUpdate(THashType(Control), Index);
@@ -2215,7 +2207,7 @@ procedure TListViewContent.DoRealign;
           FItemClick.AddOrSetValue(View, View.OnClick);
         View.OnClick := FNewOnClick;
       end else begin
-        FItemViews.AddOrUpdate(THashType(View), I);
+        FItemViews.AddOrUpdate(THashType(ItemView), I);
         if Assigned(ItemView.OnClick) and (not EqulsMethod(FNewOnClick, ItemView.OnClick)) then
           FItemClick.AddOrSetValue(ItemView, ItemView.OnClick);
         ItemView.OnClick := FNewOnClick;
@@ -3019,7 +3011,7 @@ end;
 
 function TListViewContent.ObjectAtPoint(AScreenPoint: TPointF): IControl;
 begin
-  if {$IF not Defined(ANDROID) and not Defined(IOS)}ListView.FMouseDown and{$ENDIF} Assigned(ListView.FAniCalculations) and (ListView.FAniCalculations.Shown) then
+  if {$IF not Defined(ANDROID) and not Defined(IOS)}ListView.FMouseDown and{$ENDIF} ListView.IsDragScrolling then
     Result := nil   // 手势滚动中，不允许点击子项
   else
     Result := inherited ObjectAtPoint(AScreenPoint);
@@ -3918,7 +3910,7 @@ var
   Node: TTreeListNode<T>;
 begin
   Node := Nodes[Index];
-  if (Node.Level = 0) or (Node.Count > 1) then
+  if (Node.Level = 0) or (Node.Count > 0) then
     Result := GetNodeGroupView(Index, Node, ConvertView, Parent)
   else
     Result := GetNodeItemView(Index, Node, ConvertView, Parent)

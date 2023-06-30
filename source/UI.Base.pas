@@ -865,7 +865,7 @@ type
   /// 提示样式
   /// </summary>
   TBadgeStyle = (EmptyText {空白}, NumberText {数字值 (显示数字)},
-    NewText {显示New文本}, HotText {显示Hot文本}, Icon {显示指定的图像});
+    NewText {显示New文本}, HotText {显示Hot文本}, Icon {显示指定的图像}, Text {自定义文本});
 
   /// <summary>
   /// 标记提示接口
@@ -884,6 +884,7 @@ type
     procedure Realign;
     procedure SetVisible(const Value: Boolean);
     function GetEnabled: Boolean;
+    procedure BringToFront;
 
     property Value: Integer read GetValue write SetValue;
     property MaxValue: Integer read GetMaxValue write SetMaxValue;
@@ -1465,6 +1466,8 @@ type
     function PointInObject(X, Y: Single): Boolean; override;
     procedure PlaySoundEffect(ASoundConstant: Integer);
     procedure PlayClickEffect(); virtual;
+
+    procedure BringToFront; override;
 
     procedure Invalidate;
     procedure DoResize;
@@ -3751,6 +3754,13 @@ procedure TView.ApplyTriggerEffect(const AInstance: TFmxObject;
   const ATrigger: string);
 begin
   // inherited; disable all effect
+end;
+
+procedure TView.BringToFront;
+begin
+  inherited;
+  if Assigned(FBadgeView) and FBadgeView.GetEnabled then
+    FBadgeView.BringToFront;
 end;
 
 function TView.CanAnimation: Boolean;
@@ -9181,7 +9191,7 @@ var
   Item: THtmlTextItem;
   I: Integer;
 begin
-  if (Button = TMouseButton.mbLeft) and (FLinkHot >= 0) and (FLinkHot < FLinkHrefs.Count) then begin
+  if (Button = TMouseButton.mbLeft) and (FLinkHot >= 0) and (FLinkHot < FLinkRangeCount) then begin
     if Assigned(Sender) then begin
       for I := 0 to FList.Count - 1 do begin
         if FList[I].Link = FLinkHot then begin
